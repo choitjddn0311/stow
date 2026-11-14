@@ -5,6 +5,7 @@
 ## 현재 상태
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
+- **5a 배포 준비 중** (브랜치 `feat/step5a-release`): 번들 ID 적용, `release.sh`·README·설치 안내, 로컬에서 DMG 생성 확인. 남은 것: PR 병합 → GitHub 초안 릴리스 → 다른 계정·기기 설치 테스트(사용자) → 공개
 - 설계와 로드맵: `PROJECT.md` 참고. MVP 이후 로드맵에 "글로벌 단축키 플로팅 패널" 추가(사용자 요청 2026-11-14, 세부 사항 미정)
 
 ## 로드맵 진행 상황
@@ -15,8 +16,16 @@
 | 3. 추출 코어 | **완료** (2026-11-14, PR #4) |
 | 4. UI·설정 | **완료** (2026-11-14, PR #6) |
 | (UI 다듬기) | **완료** (2026-11-14, PR #7) |
-| 5a. 배포(계정 없이) | 미착수 ← 다음 |
+| 5a. 배포(계정 없이) | **진행 중** (DMG 생성 확인, 설치 테스트 전) |
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
+
+## 5a 배포 (2026-11-14, `feat/step5a-release`)
+- 번들 ID `io.github.choitjddn0311.stow`(테스트 `.tests`) 적용. 개발 중 저장한 설정은 옮겨지지 않음
+- `scripts/release.sh`: 커밋된 상태만 허용 → 엔진 준비 → Release 빌드(`build/release/`) → 검증(서명 `--deep --strict`, arm64, 번들 ID·버전, 앱과 엔진 실행 파일의 Hardened Runtime, yt-dlp·deno 실행, ffmpeg GPL 구성 없음, 앱 안에 로컬 경로 없음) → DMG(앱, Applications 바로가기, "설치 안내.txt", UDZO) → SHA-256. `--publish`는 main이 origin/main과 같을 때만, 같은 태그가 없을 때만 GitHub Releases에 **초안**(태그 `v<MARKETING_VERSION>`)으로 올린다
+- Release 빌드 심볼 제거: 검증 단계가 앱 실행 파일 디버그 맵에 남은 소스·빌드 경로(`/Users/...`)를 잡음 → 앱 대상 Release에 `DEPLOYMENT_POSTPROCESSING`·`STRIP_INSTALLED_PRODUCT`·`STRIP_STYLE = all`
+- `README.md`(소개, 설치와 "그래도 열기" 안내, 이용 안내, 오픈소스 구성 요소·라이선스·FFmpeg/LAME 소스, 빌드 방법), `docs/release/INSTALL.txt`(DMG 안 설치 안내)
+- 로컬 결과(0.1.0): DMG 63MB, `hdiutil verify` 통과, DMG 안 앱 서명 검증 통과, `spctl --assess`는 예상대로 rejected(공증 없음)
+- 아직 확인하지 않은 것: 인터넷에서 받은(격리 표시가 붙은) 상태로 "그래도 열기" 후 앱이 열리고, 앱 안 엔진(python·deno·ffmpeg)이 추가 경고 없이 실행되는지 → 다른 계정·기기 설치 테스트에서 확인
 
 ## UI 다듬기 (2026-11-14, PR #7)
 - 시안 캔버스(Artifact, 비공개): https://claude.ai/artifact/8hdHa6wfW8TngvMrB9DAq2 — A 시스템 설정형, B 중앙 카드형, C 툴바 통합형, 공통 이용 고지. 디자인 시스템은 쓰지 않고 Apple HIG 기준(사용자 선택)
