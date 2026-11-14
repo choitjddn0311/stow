@@ -1,23 +1,32 @@
 import AppKit
 import SwiftUI
 
-/// 추출 화면(디자인 B안 "중앙 카드형", Apple HIG 기준).
-/// 위: 주소 입력 → 가운데: 빈 상태 안내 또는 영상 카드 → 아래: 포맷·음질·저장 위치 한 줄 → 추출·진행·완료.
+/// 추출 화면(디자인 A안 "시스템 설정형", Apple HIG 기준).
+/// macOS 시스템 설정처럼 묶음 상자(grouped Form)에 "영상"·"출력"을 두고, 아래 고정 바에서 추출·진행·완료를 다룬다.
 struct ExtractView: View {
     @Bindable var model: ExtractViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 16) {
-            urlField
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Form {
+            Section("영상") {
+                urlRow
+                statusRow
+            }
+            OutputSection(settings: model.settings)
+                .disabled(model.isBusy)
         }
-        .padding(.horizontal, 48)
-        .padding(.top, 20)
-        .padding(.bottom, 28)
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .formStyle(.grouped)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
+                bottomBar
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: 60)
+            }
+            .background(.bar)
+        }
         // 상태 전환은 짧게, "동작 줄이기"를 켜면 애니메이션 없이 바꾼다.
         .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: phase)
         .alert(
@@ -30,22 +39,6 @@ struct ExtractView: View {
         } message: { alert in
             Text(alert.message)
         }
-    }
-
-    // MARK: - 주소 입력
-
-    /// 주소를 붙여 넣으면 자동으로 불러온다(별도 버튼 없음). Return은 바로 불러오거나, 불러온 뒤에는 추출한다.
-    /// 조회 중에도 주소를 바꿀 수 있고, 추출 중에만 잠근다. 키보드 포커스 링을 위해 시스템 텍스트 필드를 쓴다.
-    private var urlField: some View {
-        TextField("유튜브 영상 주소를 붙여 넣으세요", text: $model.urlText)
-            .textFieldStyle(.roundedBorder)
-            .controlSize(.large)
-            .onSubmit { model.submit() }
-            .disabled(isExtracting)
-    }
-
-    private var isExtracting: Bool {
-        if case .extracting = model.state { true } else { false }
     }
 
     /// 애니메이션 기준이 되는 화면 단계(진행률 변화에는 애니메이션하지 않는다).
@@ -61,108 +54,141 @@ struct ExtractView: View {
         }
     }
 
-    // MARK: - 본문
+    private var isExtracting: Bool {
+        if case .extracting = model.state { true } else { false }
+    }
+
+    // MARK: - 영상 섹션
+
+    /// 주소를 붙여 넣으면 자동으로 불러온다(별도 버튼 없음). Return은 바로 불러오거나, 불러온 뒤에는 추출한다.
+    /// 조회 중에도 주소를 바꿀 수 있고, 추출 중에만 잠근다.
+    private var urlRow: some View {
+        TextField(text: $model.urlText, prompt: Text("유튜브 영상 주소를 붙여 넣으세요")) {
+            Label {
+                Text("주소")
+            } icon: {
+                SettingsIcon(symbol: "link", color: .blue)
+            }
+        }
+        .onSubmit { model.submit() }
+        .disabled(isExtracting)
+    }
 
     @ViewBuilder
-    private var content: some View {
+    private var statusRow: some View {
         switch model.state {
         case .idle:
-            ContentUnavailableView {
-                Label("유튜브 링크에서 오디오를 추출합니다", systemImage: "music.note")
-            } description: {
-                Text("위 칸에 주소를 붙여 넣으면 영상 정보를 자동으로 불러옵니다.")
-            }
+            Label("주소를 붙여 넣으면 영상 정보를 자동으로 불러옵니다.", systemImage: "info.circle")
+                .foregroundStyle(.secondary)
         case .fetching:
-            VStack(spacing: 12) {
-                ProgressView()
-                Text("영상 정보를 불러오는 중…")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("영상 정보를 불러오는 중…").foregroundStyle(.secondary)
+                Spacer()
                 Button("취소") { model.cancel() }
                     .keyboardShortcut(.cancelAction)
             }
         case .failed(let error, nil):
-            ContentUnavailableView {
-                Label("영상을 불러올 수 없습니다", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(error.errorDescription ?? "")
-            }
+            ErrorLabel(error: error)
         default:
             if let metadata = model.metadata {
-                VStack(spacing: 16) {
-                    VideoCard(metadata: metadata)
-                    OptionsBar(settings: model.settings)
-                        .disabled(model.isBusy)
-                    Spacer(minLength: 0)
-                    actionArea
-                }
+                VideoRow(metadata: metadata)
             }
         }
     }
 
-    // MARK: - 추출·진행·완료
+    // MARK: - 하단 바: 추출·진행·완료
 
     @ViewBuilder
-    private var actionArea: some View {
+    private var bottomBar: some View {
         switch model.state {
+        case .idle, .fetching, .failed(_, nil):
+            HStack {
+                Text("영상을 불러오면 추출할 수 있습니다.")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                extractButton
+            }
+        case .ready:
+            HStack {
+                Text("\(folderName)에 저장합니다.")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                extractButton
+            }
         case .extracting(_, let progress):
             ExtractProgressView(progress: progress, format: model.settings.format, onCancel: model.cancel)
         case .completed(_, let file):
-            VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
                 Label {
                     Text("저장했습니다: \(file.lastPathComponent)")
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(file.path)
                 } icon: {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 }
-                HStack {
-                    Button("다른 영상 추출") { model.startOver() }
-                    Spacer()
-                    Button("다시 추출") { model.extract() }
-                        .help("다른 포맷이나 음질로 한 번 더 추출합니다")
-                    Button("Finder에서 보기") { model.revealInFinder() }
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.defaultAction)
-                }
-                .controlSize(.large)
+                Spacer(minLength: 8)
+                Button("다른 영상 추출") { model.startOver() }
+                Button("다시 추출") { model.extract() }
+                    .help("다른 포맷이나 음질로 한 번 더 추출합니다")
+                Button("Finder에서 보기") { model.revealInFinder() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
             }
+            .controlSize(.large)
         case .failed(let error, .some):
-            VStack(alignment: .leading, spacing: 12) {
+            HStack {
                 ErrorLabel(error: error)
+                Spacer(minLength: 8)
                 extractButton
             }
-        case .ready:
-            extractButton
-        case .idle, .fetching, .failed(_, nil):
-            EmptyView()
         }
     }
 
-    /// 주 동작. Mac 규칙대로 글자 길이에 맞춘 강조 버튼을 오른쪽 끝에 둔다.
+    /// 주 동작. 글자 길이에 맞춘 강조 버튼을 오른쪽 끝에 둔다.
     private var extractButton: some View {
-        HStack {
-            Spacer()
-            Button {
-                model.extract()
-            } label: {
-                Label("\(model.settings.format.displayName)(으)로 추출", systemImage: "arrow.down.circle.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .keyboardShortcut(.defaultAction)
-            .disabled(!model.canExtract)
+        Button {
+            model.extract()
+        } label: {
+            Label("\(model.settings.format.displayName)(으)로 추출", systemImage: "arrow.down.circle.fill")
         }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .keyboardShortcut(.defaultAction)
+        .disabled(!model.canExtract)
+    }
+
+    /// Finder에 보이는 이름(예: "다운로드").
+    private var folderName: String {
+        FileManager.default.displayName(atPath: model.settings.outputDirectory.path)
     }
 }
 
 // MARK: - 하위 화면
 
-/// 큰 썸네일과 제목·채널·길이를 보여 주는 카드.
-private struct VideoCard: View {
+/// 시스템 설정의 행 아이콘: 색 사각형 위 흰 SF Symbol.
+private struct SettingsIcon: View {
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// 불러온 영상: 썸네일 + 제목·채널·길이.
+private struct VideoRow: View {
     let metadata: VideoMetadata
 
     var body: some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 14) {
             AsyncImage(url: metadata.thumbnailURL) { phase in
                 if case .success(let image) = phase {
                     image.resizable().aspectRatio(contentMode: .fill)
@@ -171,96 +197,99 @@ private struct VideoCard: View {
                         .fill(.quaternary)
                         .overlay {
                             Image(systemName: "play.rectangle")
-                                .font(.system(size: 36, weight: .light))
+                                .font(.system(size: 20, weight: .light))
                                 .foregroundStyle(.secondary)
                         }
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 196)
-            .clipped()
+            .frame(width: 112, height: 63)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor))
+            }
             .accessibilityHidden(true)
 
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(metadata.title)
                     .font(.headline)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .lineLimit(2)
                     .help(metadata.title)
-                Spacer(minLength: 8)
-                Text(subtitle)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
+                if let uploader = metadata.uploader {
+                    Text(uploader).foregroundStyle(.secondary)
+                }
+                if let duration = metadata.duration {
+                    Text(DurationFormat.string(from: duration))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            Spacer(minLength: 0)
         }
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor))
-        }
-        .shadow(color: .black.opacity(0.08), radius: 2, y: 1)
+        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
-    }
-
-    /// "채널 · 5:25"
-    private var subtitle: String {
-        [metadata.uploader, metadata.duration.map(DurationFormat.string(from:))]
-            .compactMap { $0 }
-            .joined(separator: " · ")
     }
 }
 
-/// 포맷(세그먼트) · 음질(팝업) · 저장 위치(메뉴)를 한 줄로.
-private struct OptionsBar: View {
+/// "출력" 섹션: 포맷 · 음질 · 저장 위치.
+private struct OutputSection: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
-        HStack(spacing: 8) {
-            Picker("포맷", selection: $settings.formatKind) {
+        Section("출력") {
+            Picker(selection: $settings.formatKind) {
                 ForEach(AudioFormatKind.allCases, id: \.self) { kind in
                     Text(kind.displayName).tag(kind)
                 }
+            } label: {
+                Label {
+                    Text("포맷")
+                } icon: {
+                    SettingsIcon(symbol: "waveform", color: .purple)
+                }
             }
             .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
 
             if settings.formatKind == .mp3 {
-                Picker("음질", selection: $settings.mp3Bitrate) {
+                Picker(selection: $settings.mp3Bitrate) {
                     ForEach(MP3Bitrate.allCases, id: \.self) { bitrate in
                         Text("\(bitrate.rawValue) kbps").tag(bitrate)
                     }
+                } label: {
+                    qualityLabel
                 }
-                .labelsHidden()
-                .fixedSize()
             } else {
-                Text("무손실")
-                    .foregroundStyle(.secondary)
-                    .help("원본 샘플레이트를 유지합니다")
+                LabeledContent {
+                    Text("무손실(원본 샘플레이트 유지)")
+                } label: {
+                    qualityLabel
+                }
             }
 
-            Spacer(minLength: 8)
-
-            Menu {
-                Button("다른 폴더 선택…") { chooseFolder() }
-                Button("Finder에서 열기") { NSWorkspace.shared.open(settings.outputDirectory) }
+            LabeledContent {
+                HStack(spacing: 8) {
+                    Text(DisplayPath.abbreviated(settings.outputDirectory))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(settings.outputDirectory.path)
+                    Button("변경…") { chooseFolder() }
+                }
             } label: {
-                Label(folderName, systemImage: "folder")
-                    .labelStyle(.titleAndIcon)
+                Label {
+                    Text("저장 위치")
+                } icon: {
+                    SettingsIcon(symbol: "folder.fill", color: .cyan)
+                }
             }
-            .fixedSize()
-            .help("저장 위치: \(DisplayPath.abbreviated(settings.outputDirectory))")
-            .accessibilityLabel("저장 위치: \(folderName)")
         }
     }
 
-    /// Finder에 보이는 이름(예: "다운로드").
-    private var folderName: String {
-        FileManager.default.displayName(atPath: settings.outputDirectory.path)
+    private var qualityLabel: some View {
+        Label {
+            Text("음질")
+        } icon: {
+            SettingsIcon(symbol: "dial.medium", color: .orange)
+        }
     }
 
     private func chooseFolder() {
