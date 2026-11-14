@@ -61,12 +61,19 @@ CLAUDE.md와 docs/development/SESSION_HANDOFF.md를 읽고
 ### 절차
 1. `main` 최신화 → 작업 브랜치 생성
 2. 구현, 커밋
-3. **로컬 검증**: `SESSION_HANDOFF.md`의 빌드·테스트 명령 실행, 통과 확인
-4. 푸시, `gh pr create` (본문은 `.github/pull_request_template.md` 형식, 로컬 검증 결과 포함)
+3. **로컬 검증**: Debug 테스트만 실행(`SESSION_HANDOFF.md`의 `test` 명령). Release 빌드는 CI에 맡긴다
+4. 푸시, `gh pr create` (본문은 `.github/pull_request_template.md` 형식)
 5. **CI 검증**: `build-test` 체크 통과 확인 (`gh pr checks --watch`)
-6. **코드 리뷰**: `/code-review` 실행 → 발견 사항 수정 후 다시 3~5
+6. **코드 리뷰**: 아래 기준에 해당할 때만 `/code-review`를 PR당 1회 실행 → 지적 사항 수정 후 3~5만 다시 수행(리뷰 재실행 안 함)
 7. 사용자에게 결과 보고(로컬 테스트, CI, 리뷰 결과) → **사용자 승인 후** `gh pr merge --squash --delete-branch`
 8. 로컬 `main` 최신화, 작업 브랜치 정리
+
+### 검증 범위 (중복 방지)
+| 검증 | 언제 | 비고 |
+|---|---|---|
+| 로컬 Debug 테스트 | 모든 PR(코드 변경 시) | CI 재시도 루프를 줄이는 용도 |
+| CI `build-test` | 모든 PR | Debug 테스트 + Release 빌드 + Release 바이너리 검증. **PR에서만 실행**(병합 후 main 재실행 없음: 브랜치 보호의 최신 상태 요구로 PR 검증 결과 = 병합 결과) |
+| `/code-review` | Swift 코드·Xcode 프로젝트·스크립트 로직 변경 PR, PR당 1회 | 문서·CI 설정만 바꾼 PR은 생략. 리뷰 반영 수정은 재리뷰하지 않음(변경이 커서 사실상 새 기능이면 예외) |
 
 ### 실패 시
 - 로컬, CI, 리뷰 중 하나라도 실패하면 병합하지 않는다. 원인을 고치고 같은 브랜치에 커밋을 추가한다.

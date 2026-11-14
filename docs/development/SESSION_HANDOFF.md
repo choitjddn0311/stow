@@ -47,6 +47,7 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 
 ## CI
 - `.github/workflows/ci.yml`: 러너 `macos-26`, Xcode 26.6으로 고정(로컬은 27.2). Debug 테스트와 Release 빌드를 실행함
+- PR에서만 실행(병합 후 main 재실행 없음). 검증 범위 기준은 `CONTEXT_GUIDE.md` 5장
 - 로컬과 CI의 Xcode 버전이 다르므로, 최신 SDK 기능은 CI에서 실패할 수 있음. Xcode를 올릴 때는 워크플로의 `XCODE_APP`도 함께 갱신
 
 ## 미해결 문제 / 주의
@@ -61,4 +62,4 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 - `Stow/Resources/bin/`에 넣고 앱 번들 복사와 서명 구성
 - `Stow/Core/Engine/EngineLocator.swift`, `ProcessRunner.swift`(비동기, 줄 단위 출력, 취소 시 프로세스 종료)
 - **완료 조건**: 앱에서 `yt-dlp --version`과 `ffmpeg -version`이 실행됨, 취소 후 남은 프로세스 없음, `ffmpeg -buildconf`에 GPL 구성 없음
-- 시작 전 결정할 것: 실행 파일을 git에 넣을지(스크립트로만 받을지)
+- 결정됨: 실행 파일은 git에 넣지 않고 스크립트로만 받는다(`Stow/Resources/bin/`은 `.gitignore`). CI에서도 스크립트를 실행해야 하므로, ffmpeg 빌드 시간이 길면 CI 캐시(`actions/cache`)가 필요할 수 있음
