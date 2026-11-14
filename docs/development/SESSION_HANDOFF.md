@@ -25,6 +25,7 @@
 - Release 빌드 심볼 제거: 검증 단계가 앱 실행 파일 디버그 맵에 남은 소스·빌드 경로(`/Users/...`)를 잡음 → 앱 대상 Release에 `DEPLOYMENT_POSTPROCESSING`·`STRIP_INSTALLED_PRODUCT`·`STRIP_STYLE = all`
 - `README.md`(소개, 설치와 "그래도 열기" 안내, 이용 안내, 오픈소스 구성 요소·라이선스·FFmpeg/LAME 소스, 빌드 방법), `docs/release/INSTALL.txt`(DMG 안 설치 안내)
 - 로컬 결과(0.1.0): DMG 63MB, `hdiutil verify` 통과, DMG 안 앱 서명 검증 통과, `spctl --assess`는 예상대로 rejected(공증 없음)
+- 코드 리뷰(PR #9) 반영 9건: `--publish` 시 gh 로그인·기존 태그(로컬·원격)·릴리스 조회 실패 구분을 빌드 전에 확인, 빌드 설정을 변수로 받아 읽기(pipefail로 메시지 없이 멈추는 문제), 번들 ID를 빌드 설정에서 읽기, codesign 검사 실패 메시지, 경로 노출 검사에 홈 폴더 추가, 설치 안내를 macOS 14(Control-클릭 → 열기)와 15 이후(그래도 열기)로 구분, 릴리스 노트를 GitHub용 문구로, pbxproj 정렬. 반영 후 DMG 재생성 확인, `--publish`는 main이 아니면 아무것도 올리지 않고 멈춤 확인
 - 아직 확인하지 않은 것: 인터넷에서 받은(격리 표시가 붙은) 상태로 "그래도 열기" 후 앱이 열리고, 앱 안 엔진(python·deno·ffmpeg)이 추가 경고 없이 실행되는지 → 다른 계정·기기 설치 테스트에서 확인
 
 ## UI 다듬기 (2026-11-14, PR #7)
