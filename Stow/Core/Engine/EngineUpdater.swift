@@ -42,7 +42,10 @@ struct URLSessionFetcher: HTTPFetching {
         var request = URLRequest(url: url, timeoutInterval: 60)
         // GitHub API는 User-Agent가 필요하다. 사용자 정보는 넣지 않는다.
         request.setValue("Stow", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        // API 응답 형식 지정은 API 요청에만. 릴리스 파일(리다이렉트되는 CDN) 요청에는 붙이지 않는다.
+        if url.host == "api.github.com" {
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        }
         let data: Data
         let response: URLResponse
         do {
@@ -182,6 +185,11 @@ struct EngineUpdater: Sendable {
         if keep == nil { try? fileManager.removeItem(at: currentFile) }
     }
 
+    /// 받아 둔 버전을 쓰지 않도록 기록(`current`)만 지운다. 실행 중일 수 있는 파일은 다음 앱 시작 때 지운다.
+    func clearCurrent() {
+        try? FileManager.default.removeItem(at: currentFile)
+    }
+
     private func binaryURL(for version: String) -> URL {
         storage.appending(path: version).appending(path: "yt-dlp")
     }
@@ -191,7 +199,7 @@ struct EngineUpdater: Sendable {
     /// yt-dlp 버전 형식: YYYY.MM.DD 또는 YYYY.MM.DD.N (숫자와 점만)
     static func isValidVersion(_ text: String) -> Bool {
         let parts = text.split(separator: ".", omittingEmptySubsequences: false)
-        return (3...4).contains(parts.count) && parts.allSatisfy { !$0.isEmpty && $0.allSatisfy(\.isASCII) && Int($0) != nil }
+        return (3...4).contains(parts.count) && parts.allSatisfy { !$0.isEmpty && $0.allSatisfy { ("0"..."9").contains($0) } }
     }
 
     /// `a`가 `b`보다 새 버전이면 true. 숫자 단위로 비교한다(2026.10.26 < 2026.10.26.1 < 2026.11.2).

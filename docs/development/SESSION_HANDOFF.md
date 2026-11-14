@@ -25,9 +25,11 @@
 - 사용자 결정: 자동 확인 + 자동 설치(하루 한 번, 앱 시작 시), stable 채널. 설계는 PROJECT.md 5장 "엔진 업데이트"
 - `Stow/Core/Engine/EngineUpdater.swift`: GitHub 최신 stable 확인, `yt-dlp`·`SHA2-256SUMS` 받기, SHA-256 대조, 번들 Python으로 `--version` 실행해 태그와 비교, 준비 폴더 → `Application Support/<번들 ID>/engine/yt-dlp/<버전>/yt-dlp`로 이동, `current` 기록, 옛 버전 정리. 버전 비교(숫자 단위), 버전 형식 검증(경로 조작 방지)
 - `Stow/Core/Engine/EngineSource.swift`: 지금 쓸 엔진(잠금 보호). `YtDlpClient.engineSource`로 작업마다 시작할 때 읽음. `EngineLocator.replacingYtDlp(with:)`
-- `Stow/Features/EngineUpdate/EngineUpdateCoordinator.swift`: 앱 시작 시 받아 둔 버전이 번들보다 새로우면 사용(아니면 삭제), 하루 한 번 자동 확인·설치(실패는 조용히), 메뉴 "엔진 업데이트 확인…"은 결과를 NSAlert로. 테스트 호스트에서는 시작하지 않음(`XCTestConfigurationFilePath`)
+- `Stow/Features/EngineUpdate/EngineUpdateCoordinator.swift`: 앱 시작 시(실행당 한 번) 받아 둔 버전이 번들보다 새롭고 실행되면 사용(아니면 삭제), 자동 확인·설치(실패는 조용히), 메뉴 "엔진 업데이트 확인…"·"앱에 들어 있는 엔진으로 되돌리기"는 결과를 NSAlert로. 테스트 호스트에서는 시작하지 않음(`XCTestConfigurationFilePath`)
 - 테스트: `StowTests/EngineUpdaterTests.swift` — 버전 비교·형식, 체크섬 목록 해석, 실제 번들 yt-dlp를 가짜 응답으로 넣은 설치 성공·체크섬 불일치·버전 불일치·잘못된 릴리스 정보 거부, 옛 버전 정리, `EngineSource` 교체 반영. 네트워크 테스트(URL 지정 시): 실제 GitHub 최신 stable 읽기와 임시 폴더 설치(2026-11-14: 최신 stable 2026.10.26 = 번들 버전, 실제 받기·검증·설치 통과)
-- 로컬 Debug `test` 83개 통과, 런타임 이슈 0건
+- 코드 리뷰(PR #11) 반영 9건: 활성화·옛 버전 정리는 실행당 한 번(창을 다시 열어도 추출 중 파일 삭제 없음), 확인 시각은 최신이거나 설치 성공일 때만 기록(실패하면 다음에 재시도), 앱이 켜져 있으면 1시간마다 확인 시점 점검(하루 지나면 확인), 메뉴 "앱에 들어 있는 엔진으로 되돌리기"(되돌린 버전은 자동 재설치 안 함, `rejectedEngineVersion`), 번들 버전을 모르면 받은 버전을 쓰지 않음, 받은 파일은 시작 시 실행해 보고 손상이면 번들로, 번들 버전은 `bin/yt-dlp.version`(fetch-binaries.sh가 기록, embed 스탬프에 최상위 목록 포함)에서 읽음, Accept 헤더는 API 요청에만, 버전 형식은 숫자만
+- 테스트: `StowTests/EngineUpdateCoordinatorTests.swift`(활성화: 새 버전 사용·번들보다 새롭지 않으면 삭제·손상 파일 삭제·실행당 한 번, 자동 확인: 설치·실패 시 재시도 가능·최신 확인 기록, 되돌리기: 번들 복귀·같은 버전 재설치 안 함)
+- 로컬 Debug `test` 92개 통과, 런타임 이슈 0건
 - README에 GitHub 접속 사실 안내
 - 아직 확인하지 않은 것: 실제로 새 stable이 나왔을 때 앱이 자동으로 받아 쓰는지(현재 번들 버전이 최신이라 재현 불가). 다음 yt-dlp 릴리스 후 확인
 

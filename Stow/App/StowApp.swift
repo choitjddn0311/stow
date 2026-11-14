@@ -49,6 +49,8 @@ struct StowApp: App {
             CommandGroup(after: .appInfo) {
                 Button("엔진 업데이트 확인…") { engineUpdates?.checkNow() }
                     .disabled(engineUpdates == nil)
+                Button("앱에 들어 있는 엔진으로 되돌리기") { engineUpdates?.revertToBundled() }
+                    .disabled(engineUpdates == nil)
             }
         }
     }

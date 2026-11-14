@@ -31,6 +31,8 @@ STAMP_FILE="${DERIVED_FILE_DIR:?}/engine-embedded.stamp"
 STAMP=$(
   {
     cat "$SRC"/.versions/*
+    # 버전 기록 밖의 파일(예: yt-dlp.version)이 추가·변경돼도 다시 복사하도록 최상위 목록도 넣는다.
+    ls -ln "$SRC"
     echo "$IDENTITY $SIGN ${TIMESTAMP[*]} $DEST"
     cat "$0" "$ENTITLEMENTS_DIR"/*.entitlements
   } | shasum -a 256 | cut -d' ' -f1

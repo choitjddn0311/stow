@@ -25,6 +25,9 @@ DENO_LICENSE_SHA256=f62497fffecc0852960c8d3e6934b9db86d16396e9b604072e923892cae3
 
 install_ytdlp() {
   local stamp="$YTDLP_VERSION $YTDLP_SHA256"
+  # 앱이 번들 yt-dlp 버전을 Python 실행 없이 알 수 있게 한다(앱 안 엔진 업데이트의 비교 기준).
+  mkdir -p "$BIN_DIR"
+  printf '%s\n' "$YTDLP_VERSION" > "$BIN_DIR/yt-dlp.version"
   if is_current yt-dlp "$stamp"; then log "yt-dlp $YTDLP_VERSION: 이미 설치됨"; return; fi
 
   local base="https://github.com/yt-dlp/yt-dlp/releases/download/$YTDLP_VERSION"

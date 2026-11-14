@@ -22,6 +22,8 @@ struct EngineUpdaterVersionTests {
         #expect(!EngineUpdater.isValidVersion("v2026.10.26"))
         #expect(!EngineUpdater.isValidVersion("../2026.10.26"))
         #expect(!EngineUpdater.isValidVersion("2026..26"))
+        #expect(!EngineUpdater.isValidVersion("+2026.1.1"))
+        #expect(!EngineUpdater.isValidVersion("2026.-1.1"))
     }
 
     @Test func findsChecksumInSumsFile() {

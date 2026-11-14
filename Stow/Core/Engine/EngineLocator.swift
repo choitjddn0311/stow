@@ -13,6 +13,8 @@ struct EngineLocator: Sendable, Equatable {
     let ffmpeg: URL
     let ffprobe: URL
     let deno: URL
+    /// 번들 yt-dlp 버전(`bin/yt-dlp.version`, `fetch-binaries.sh`가 기록). 없으면 nil.
+    let bundledYtDlpVersion: String?
 
     /// `binDirectory`에서 구성 요소를 찾고, 모두 있는지 확인한다.
     init(binDirectory: URL) throws(EngineError) {
@@ -21,6 +23,9 @@ struct EngineLocator: Sendable, Equatable {
         ffmpeg = binDirectory.appending(path: "ffmpeg")
         ffprobe = binDirectory.appending(path: "ffprobe")
         deno = binDirectory.appending(path: "deno")
+        bundledYtDlpVersion = (try? String(contentsOf: binDirectory.appending(path: "yt-dlp.version"), encoding: .utf8))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { EngineUpdater.isValidVersion($0) ? $0 : nil }
 
         let fileManager = FileManager.default
         for executable in [python, ffmpeg, ffprobe, deno]
@@ -33,7 +38,8 @@ struct EngineLocator: Sendable, Equatable {
         }
     }
 
-    private init(python: URL, ytDlp: URL, ffmpeg: URL, ffprobe: URL, deno: URL) {
+    private init(python: URL, ytDlp: URL, ffmpeg: URL, ffprobe: URL, deno: URL, bundledYtDlpVersion: String?) {
+        self.bundledYtDlpVersion = bundledYtDlpVersion
         self.python = python
         self.ytDlp = ytDlp
         self.ffmpeg = ffmpeg
@@ -43,7 +49,9 @@ struct EngineLocator: Sendable, Equatable {
 
     /// yt-dlp만 다른 파일(앱 안에서 업데이트한 버전)로 바꾼 엔진. 나머지는 번들 것을 쓴다.
     func replacingYtDlp(with url: URL) -> EngineLocator {
-        EngineLocator(python: python, ytDlp: url, ffmpeg: ffmpeg, ffprobe: ffprobe, deno: deno)
+        EngineLocator(
+            python: python, ytDlp: url, ffmpeg: ffmpeg, ffprobe: ffprobe, deno: deno, bundledYtDlpVersion: bundledYtDlpVersion
+        )
     }
 
     /// 앱 번들(`Contents/Resources/bin`)에 포함된 엔진.
