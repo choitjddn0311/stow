@@ -92,6 +92,7 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
   - GitHub API(`repos/yt-dlp/yt-dlp/releases/latest`)로 확인하고, `yt-dlp`와 `SHA2-256SUMS`를 받아 SHA-256 대조 → 번들 Python으로 `--version`을 실행해 태그와 같을 때만 설치
   - 설치 위치는 앱 번들 밖 `~/Library/Application Support/<번들 ID>/engine/yt-dlp/<버전>/yt-dlp`(Python이 읽는 zip이라 서명·Gatekeeper 무관), 쓰는 버전은 같은 폴더의 `current`에 기록
   - 다음 추출부터 새 엔진을 쓴다(`EngineSource`). 진행 중인 추출은 그대로. 옛 버전은 실행 중 삭제를 피하려고 다음 앱 시작 때 지운다. 앱 업데이트로 번들 버전이 같거나 더 새로우면 받아 둔 것을 지운다
+  - 릴리스 노트 = 제목 + `docs/release/notes/<버전>.md`(변경 사항, `--publish`에 필수) + 설치 안내. `scripts/release.sh --notes`로 미리보기
   - GPG 서명(`SHA2-256SUMS.sig`)은 검증하지 않는다(HTTPS + 같은 릴리스의 체크섬 목록). 자동 확인 실패는 조용히 넘기고 다음 확인 때 다시 시도(앱이 켜져 있으면 1시간마다 확인 시점 점검)
   - 받은 버전에 문제가 있으면 메뉴 "앱에 들어 있는 엔진으로 되돌리기". 되돌린 버전은 자동으로 다시 설치하지 않는다. 받은 파일이 실행되지 않으면 자동으로 번들 엔진을 쓴다
 - **직접 배포**: 유튜브 다운로드 앱은 App Store 심사(가이드라인 5.2.3)에서 거절될 위험이 높다.
