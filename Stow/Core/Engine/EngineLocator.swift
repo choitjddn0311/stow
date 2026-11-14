@@ -46,7 +46,8 @@ struct EngineLocator: Sendable, Equatable {
     ///
     /// - `-I`: 격리 모드. `PYTHON*` 환경 변수, 사용자 site-packages, 현재 디렉터리를 무시한다.
     /// - `-B`: `.pyc`를 쓰지 않는다. 서명된 번들 안에 파일이 생기면 서명이 깨진다.
+    /// - `-X utf8`: 로케일과 관계없이 입출력을 UTF-8로 한다(Finder에서 실행하면 LANG이 없다).
     func ytDlpCommand(_ arguments: [String]) -> (executable: URL, arguments: [String]) {
-        (python, ["-I", "-B", ytDlp.path] + arguments)
+        (python, ["-I", "-B", "-X", "utf8", ytDlp.path] + arguments)
     }
 }
