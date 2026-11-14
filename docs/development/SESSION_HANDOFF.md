@@ -5,6 +5,7 @@
 ## 현재 상태
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
+- **5a 배포 준비 중** (브랜치 `feat/step5a-release`): 번들 ID 적용, `release.sh`·README·설치 안내, 로컬에서 DMG 생성 확인. 남은 것: PR 병합 → GitHub 초안 릴리스 → 다른 계정·기기 설치 테스트(사용자) → 공개
 - 설계와 로드맵: `PROJECT.md` 참고. MVP 이후 로드맵에 "글로벌 단축키 플로팅 패널" 추가(사용자 요청 2026-11-14, 세부 사항 미정)
 
 ## 로드맵 진행 상황
@@ -15,8 +16,17 @@
 | 3. 추출 코어 | **완료** (2026-11-14, PR #4) |
 | 4. UI·설정 | **완료** (2026-11-14, PR #6) |
 | (UI 다듬기) | **완료** (2026-11-14, PR #7) |
-| 5a. 배포(계정 없이) | 미착수 ← 다음 |
+| 5a. 배포(계정 없이) | **진행 중** (DMG 생성 확인, 설치 테스트 전) |
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
+
+## 5a 배포 (2026-11-14, `feat/step5a-release`)
+- 번들 ID `io.github.choitjddn0311.stow`(테스트 `.tests`) 적용. 개발 중 저장한 설정은 옮겨지지 않음
+- `scripts/release.sh`: 커밋된 상태만 허용 → 엔진 준비 → Release 빌드(`build/release/`) → 검증(서명 `--deep --strict`, arm64, 번들 ID·버전, 앱과 엔진 실행 파일의 Hardened Runtime, yt-dlp·deno 실행, ffmpeg GPL 구성 없음, 앱 안에 로컬 경로 없음) → DMG(앱, Applications 바로가기, "설치 안내.txt", UDZO) → SHA-256. `--publish`는 main이 origin/main과 같을 때만, 같은 태그가 없을 때만 GitHub Releases에 **초안**(태그 `v<MARKETING_VERSION>`)으로 올린다
+- Release 빌드 심볼 제거: 검증 단계가 앱 실행 파일 디버그 맵에 남은 소스·빌드 경로(`/Users/...`)를 잡음 → 앱 대상 Release에 `DEPLOYMENT_POSTPROCESSING`·`STRIP_INSTALLED_PRODUCT`·`STRIP_STYLE = all`
+- `README.md`(소개, 설치와 "그래도 열기" 안내, 이용 안내, 오픈소스 구성 요소·라이선스·FFmpeg/LAME 소스, 빌드 방법), `docs/release/INSTALL.txt`(DMG 안 설치 안내)
+- 로컬 결과(0.1.0): DMG 63MB, `hdiutil verify` 통과, DMG 안 앱 서명 검증 통과, `spctl --assess`는 예상대로 rejected(공증 없음)
+- 코드 리뷰(PR #9) 반영 9건: `--publish` 시 gh 로그인·기존 태그(로컬·원격)·릴리스 조회 실패 구분을 빌드 전에 확인, 빌드 설정을 변수로 받아 읽기(pipefail로 메시지 없이 멈추는 문제), 번들 ID를 빌드 설정에서 읽기, codesign 검사 실패 메시지, 경로 노출 검사에 홈 폴더 추가, 설치 안내를 macOS 14(Control-클릭 → 열기)와 15 이후(그래도 열기)로 구분, 릴리스 노트를 GitHub용 문구로, pbxproj 정렬. 반영 후 DMG 재생성 확인, `--publish`는 main이 아니면 아무것도 올리지 않고 멈춤 확인
+- 아직 확인하지 않은 것: 인터넷에서 받은(격리 표시가 붙은) 상태로 "그래도 열기" 후 앱이 열리고, 앱 안 엔진(python·deno·ffmpeg)이 추가 경고 없이 실행되는지 → 다른 계정·기기 설치 테스트에서 확인
 
 ## UI 다듬기 (2026-11-14, PR #7)
 - 시안 캔버스(Artifact, 비공개): https://claude.ai/artifact/8hdHa6wfW8TngvMrB9DAq2 — A 시스템 설정형, B 중앙 카드형, C 툴바 통합형, 공통 이용 고지. 디자인 시스템은 쓰지 않고 Apple HIG 기준(사용자 선택)
@@ -50,7 +60,7 @@
 - 테스트 멈춤 원인과 수정: 스모크 테스트가 `ImageRenderer`로 추출 화면을 그리면 SwiftUI 런타임 이슈("Accessing FocusState's value outside of the body of a View")가 생긴다. XCTest가 이를 보고하려고 빌드 산출물을 심볼화하며 `~/Desktop` 아래 파일을 열고, 빌드마다 ad-hoc 서명이 바뀐 테스트 호스트가 데스크탑 폴더 권한 확인(TCC `kTCCServiceSystemPolicyDesktopFolder`)에 걸려 멈췄다(로그로 확인). `NSHostingView` 렌더링으로 바꾼 뒤 런타임 이슈 0건, 연속 5회 정상 종료(각 4초)
 
 ## 4단계 수동 시나리오 체크리스트 (완료 조건, 사용자 점검: 2026-11-14 전체 통과)
-앱 실행: Xcode에서 실행하거나 `open build/DerivedData/Build/Products/Debug/Stow.app`. 첫 실행을 다시 보려면 `defaults delete com.example.stow`
+앱 실행: Xcode에서 실행하거나 `open build/DerivedData/Build/Products/Debug/Stow.app`. 첫 실행을 다시 보려면 `defaults delete io.github.choitjddn0311.stow`
 - [x] 첫 실행 이용 고지가 뜨고, "종료"는 앱 종료, "동의하고 시작"은 추출 화면으로 이동. 다시 실행하면 고지가 뜨지 않음
 - [x] 정상 추출 MP3(음질 선택), WAV, FLAC: 진행률 표시, 완료 알림, Finder에서 보기, 파일 재생
 - [x] 주소를 붙여 넣으면 버튼 없이 자동으로 영상 정보를 불러옴. 불러오는 중 다른 주소로 바꾸면 새 주소로 다시 불러옴
@@ -128,7 +138,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - WAV는 원본(유튜브 opus/AAC, 보통 48kHz)을 16비트로 저장한다. 샘플레이트·비트 깊이 옵션은 미정(PROJECT.md 8장)
 - `ProcessRunner`의 파이프는 `pipe()` 뒤 `FD_CLOEXEC`를 설정한다(macOS에 `pipe2` 없음). 그 사이 다른 곳에서 fork/exec하면 fd가 샐 수 있으나 유예 시간 뒤 종료를 알리므로 멈추지는 않음
 - 오픈소스 고지 표시 방법, LGPL 소스 제공 방식 미정(라이선스 원문은 번들 `bin/licenses/`에 포함)
-- 번들 ID 확정: `io.github.choitjddn0311.stow`(사용자 결정 2026-11-14). 코드는 아직 임시값 `com.example.stow` → 5a 첫 작업으로 적용(테스트 대상은 `.tests`). 적용 후에는 개발 중 저장된 설정이 새 ID로 옮겨지지 않으며, 첫 실행 고지를 다시 보려면 `defaults delete io.github.choitjddn0311.stow`. Apple Developer 계정은 5b(서명·공증)에서만 필요
+- 번들 ID: `io.github.choitjddn0311.stow`(사용자 결정 2026-11-14, 5a에서 적용, 테스트 대상은 `.tests`). 적용 후에는 개발 중 저장된 설정이 새 ID로 옮겨지지 않으며, 첫 실행 고지를 다시 보려면 `defaults delete io.github.choitjddn0311.stow`. Apple Developer 계정은 5b(서명·공증)에서만 필요
 - 그 밖의 미정 사항은 `PROJECT.md` 8장 참고
 
 ## 다음 작업
