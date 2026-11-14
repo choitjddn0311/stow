@@ -22,14 +22,21 @@ struct StowSmokeTests {
         #expect(parts.dropFirst().allSatisfy { $0 == 0 })
     }
 
-    /// 루트 화면을 실제로 렌더링해 내용(텍스트)이 그려지는지 확인한다.
+    /// 루트 화면을 실제로 렌더링해 내용(텍스트)이 그려지는지 확인한다(이용 고지, 추출 화면 각각).
     /// 배경이 투명하므로, 그려진 픽셀(알파 > 0)이 없으면 화면 내용이 비어 있는 것이다.
-    @Test func rootViewRendersContent() throws {
-        let renderer = ImageRenderer(content: RootView())
+    @Test(arguments: [false, true])
+    func rootViewRendersContent(noticeAccepted: Bool) throws {
+        let defaults = try #require(UserDefaults(suiteName: "stow-smoke-\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.acceptedNoticeVersion = noticeAccepted ? UsageNotice.version : 0
+        let model = ExtractViewModel(
+            settings: settings, engine: YtDlpClient(engine: try EngineLocator.bundled()), notifier: SilentNotifier()
+        )
+        let renderer = ImageRenderer(content: RootView(model: model, settings: settings))
         renderer.scale = 1
         let image = try #require(renderer.cgImage)
-        #expect(image.width >= 420)
-        #expect(image.height >= 300)
+        #expect(image.width >= 560)
+        #expect(image.height >= 500)
         #expect(Self.drawnPixelCount(in: image) > 0)
     }
 
