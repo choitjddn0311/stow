@@ -6,6 +6,7 @@
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
 - **5a 배포: 0.1.0 공개**(2026-11-14, 사용자 요청): PR #9 병합 후 main(`787895e`)에서 `release.sh --publish`로 초안을 만들고, 올라간 DMG 체크섬을 확인한 뒤 공개. https://github.com/choitjddn0311/stow/releases/tag/v0.1.0 . **다른 계정·기기 설치 테스트는 아직 하지 않음**(사용자가 테스트 전 공개를 선택)
+- **앱 안 엔진 업데이트 구현 중** (MVP 이후 1번, 브랜치 `feat/engine-update`, PR 검증 전)
 - 설계와 로드맵: `PROJECT.md` 참고. MVP 이후 로드맵에 "글로벌 단축키 플로팅 패널" 추가(사용자 요청 2026-11-14, 세부 사항 미정)
 
 ## 로드맵 진행 상황
@@ -18,6 +19,19 @@
 | (UI 다듬기) | **완료** (2026-11-14, PR #7) |
 | 5a. 배포(계정 없이) | **0.1.0 공개** (2026-11-14, PR #9). 다른 기기 설치 테스트 미완 |
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
+| (MVP 이후 1) 앱 안 엔진 업데이트 | 구현 완료, PR 검증 전 |
+
+## 앱 안 엔진 업데이트 (2026-11-14, `feat/engine-update`)
+- 사용자 결정: 자동 확인 + 자동 설치(하루 한 번, 앱 시작 시), stable 채널. 설계는 PROJECT.md 5장 "엔진 업데이트"
+- `Stow/Core/Engine/EngineUpdater.swift`: GitHub 최신 stable 확인, `yt-dlp`·`SHA2-256SUMS` 받기, SHA-256 대조, 번들 Python으로 `--version` 실행해 태그와 비교, 준비 폴더 → `Application Support/<번들 ID>/engine/yt-dlp/<버전>/yt-dlp`로 이동, `current` 기록, 옛 버전 정리. 버전 비교(숫자 단위), 버전 형식 검증(경로 조작 방지)
+- `Stow/Core/Engine/EngineSource.swift`: 지금 쓸 엔진(잠금 보호). `YtDlpClient.engineSource`로 작업마다 시작할 때 읽음. `EngineLocator.replacingYtDlp(with:)`
+- `Stow/Features/EngineUpdate/EngineUpdateCoordinator.swift`: 앱 시작 시(실행당 한 번) 받아 둔 버전이 번들보다 새롭고 실행되면 사용(아니면 삭제), 자동 확인·설치(실패는 조용히), 메뉴 "엔진 업데이트 확인…"·"앱에 들어 있는 엔진으로 되돌리기"는 결과를 NSAlert로. 테스트 호스트에서는 시작하지 않음(`XCTestConfigurationFilePath`)
+- 테스트: `StowTests/EngineUpdaterTests.swift` — 버전 비교·형식, 체크섬 목록 해석, 실제 번들 yt-dlp를 가짜 응답으로 넣은 설치 성공·체크섬 불일치·버전 불일치·잘못된 릴리스 정보 거부, 옛 버전 정리, `EngineSource` 교체 반영. 네트워크 테스트(URL 지정 시): 실제 GitHub 최신 stable 읽기와 임시 폴더 설치(2026-11-14: 최신 stable 2026.10.26 = 번들 버전, 실제 받기·검증·설치 통과)
+- 코드 리뷰(PR #11) 반영 9건: 활성화·옛 버전 정리는 실행당 한 번(창을 다시 열어도 추출 중 파일 삭제 없음), 확인 시각은 최신이거나 설치 성공일 때만 기록(실패하면 다음에 재시도), 앱이 켜져 있으면 1시간마다 확인 시점 점검(하루 지나면 확인), 메뉴 "앱에 들어 있는 엔진으로 되돌리기"(되돌린 버전은 자동 재설치 안 함, `rejectedEngineVersion`), 번들 버전을 모르면 받은 버전을 쓰지 않음, 받은 파일은 시작 시 실행해 보고 손상이면 번들로, 번들 버전은 `bin/yt-dlp.version`(fetch-binaries.sh가 기록, embed 스탬프에 최상위 목록 포함)에서 읽음, Accept 헤더는 API 요청에만, 버전 형식은 숫자만
+- 테스트: `StowTests/EngineUpdateCoordinatorTests.swift`(활성화: 새 버전 사용·번들보다 새롭지 않으면 삭제·손상 파일 삭제·실행당 한 번, 자동 확인: 설치·실패 시 재시도 가능·최신 확인 기록, 되돌리기: 번들 복귀·같은 버전 재설치 안 함)
+- 로컬 Debug `test` 92개 통과, 런타임 이슈 0건
+- README에 GitHub 접속 사실 안내
+- 아직 확인하지 않은 것: 실제로 새 stable이 나왔을 때 앱이 자동으로 받아 쓰는지(현재 번들 버전이 최신이라 재현 불가). 다음 yt-dlp 릴리스 후 확인
 
 ## 5a 배포 (2026-11-14, PR #9, v0.1.0)
 - 번들 ID `io.github.choitjddn0311.stow`(테스트 `.tests`) 적용. 개발 중 저장한 설정은 옮겨지지 않음
