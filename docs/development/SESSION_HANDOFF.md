@@ -3,34 +3,37 @@
 **마지막 업데이트**: 2026-11-14
 
 ## 현재 상태
-- 로드맵 **2단계(엔진 번들링) 구현 완료, PR 검증 중** (브랜치 `feat/engine-bundling`). 병합 전까지는 "완료"로 표시하지 않는다.
-- 1단계(기반 구축) 완료: 빈 SwiftUI 앱이 빌드·테스트·실행됨(PR #1).
+- 로드맵 **3단계(추출 코어) 구현 완료, PR 검증 중** (브랜치 `feat/extract-core`). 병합 전까지는 "완료"로 표시하지 않는다.
+- 2단계(엔진 번들링) 완료: PR #3으로 병합(2026-11-14).
 - 설계와 로드맵: `PROJECT.md` 참고
 
 ## 로드맵 진행 상황
 | 단계 | 상태 |
 |---|---|
-| 1. 기반 구축 | **완료** (2026-11-14) |
-| 2. 엔진 번들링 | **구현 완료, PR 병합 대기** |
-| 3. 추출 코어 | 미착수 ← 다음 |
-| 4. UI·설정 | 미착수 |
+| 1. 기반 구축 | **완료** (2026-11-14, PR #1) |
+| 2. 엔진 번들링 | **완료** (2026-11-14, PR #3) |
+| 3. 추출 코어 | **구현 완료, PR 병합 대기** |
+| 4. UI·설정 | 미착수 ← 다음 |
 | 5. 배포 | 미착수 |
 
-## 2단계에서 바뀐 설계 (사용자 승인 2026-11-14, PROJECT.md 반영)
-- yt-dlp 공식 macOS 단독 실행 파일은 GPLv3+ 코드를 포함한다 → **zipimport 버전 + 번들 Python 런타임**으로 대체
-- 유튜브 전체 지원에 JS 런타임이 필요하다 → **deno 포함**
-- 엔진 원본 위치 `Stow/Resources/bin/` → **`engine/`** (폴더 동기화 그룹이 평탄화 복사하는 문제, 앱 번들 안 위치는 `Contents/Resources/bin/` 그대로)
+## 3단계 결정 사항 (사용자 결정 2026-11-14, PROJECT.md 반영)
+- 메타데이터(제목·아티스트·날짜, MP3는 챕터 포함)를 넣는다. 썸네일(앨범 아트)은 MVP 이후
+- 작업마다 임시 폴더에서 추출하고 결과만 저장 위치로 옮긴다(같은 폴더에서 포맷만 바꿔 연속 추출하면 yt-dlp가 이전 결과를 지우는 문제를 재현함)
+- 파일 이름은 영상 제목, 충돌 시 ` (2)`처럼 번호를 붙이고 덮어쓰지 않는다(덮어쓰기 선택 등은 4단계에서 결정)
 
-## 2단계에서 만든 파일
-- `scripts/lib/common.sh`: 경로, 체크섬 검증 다운로드, 버전 기록(`engine/.versions/`)
-- `scripts/fetch-binaries.sh`: yt-dlp 2026.10.26(zipimport), Python 3.13.18(python-build-standalone 20261110, 불필요 모듈 제거, GNU gdbm(GPL)을 포함한 `_dbm` 제거와 GPL 검사, 표준 라이브러리 미리 컴파일), deno 2.9.8. 버전·SHA256 고정. 로컬 경로가 배포 파일에 남지 않았는지 검사
-- `scripts/build-ffmpeg.sh`: ffmpeg 9.0.2 + libmp3lame 3.100 정적 빌드(LGPL, `--disable-everything` 후 필요한 것만, `--disable-autodetect`). 빌드 후 GPL/nonfree/version3, 로컬 경로, arm64, 시스템 외 링크 검사. 로컬 빌드 약 1분
-- `scripts/embed-engine.sh`: Xcode 빌드 단계 "Embed Engine". `engine/` → 번들 `Contents/Resources/bin/` 복사, Mach-O를 Hardened Runtime으로 서명. 변경 없으면 건너뜀(스탬프는 번들 밖 `DERIVED_FILE_DIR`에 기록, `.versions`는 번들에 넣지 않음). 타임스탬프 서버는 Developer ID 서명에서만 사용. 엔진이 없으면 안내 메시지와 함께 빌드 실패
-- `scripts/entitlements/`: `deno.entitlements`(allow-jit), `python-adhoc.entitlements`(ad-hoc일 때만 disable-library-validation)
-- `Stow/Core/Engine/EngineError.swift`, `EngineLocator.swift`(구성 요소 경로·검증, `ytDlpCommand`는 `python3 -I -B yt-dlp ...`), `ProcessRunner.swift`(posix_spawn, 새 프로세스 그룹, 줄 단위 출력 스트림(`\n`·`\r`·`\r\n`), 취소 시 그룹 SIGTERM → 유예 후 SIGKILL, 리더 종료 후 파이프를 쥔 손자가 남으면 유예 후 종료, 리더 회수 후 pgid 재사용 방지)
-- `StowTests/ProcessRunnerTests.swift`(10개), `StowTests/EngineBundleTests.swift`(8개)
-- Xcode: Stow 대상에 "Embed Engine" 빌드 단계, `ENABLE_USER_SCRIPT_SANDBOXING = NO`(Stow 대상만, 스크립트가 `engine/`을 읽기 때문)
-- CI: 엔진 캐시(`build/engine-cache`, `engine/`), 스크립트 실행, Release 번들 엔진 검증 단계 추가. timeout 45분
+## 3단계에서 만든 파일
+- `Stow/Core/Models/`: `AudioFormat`(MP3 128/192/320, WAV, FLAC)·`ExtractOptions`, `VideoMetadata`(`-J` 해석), `YouTubeURL`(youtube.com·youtu.be와 하위 도메인, 스킴 없으면 https)
+- `Stow/Core/Engine/YtDlpArguments.swift`: 공통 인자 `--ignore-config --no-playlist --color never --ffmpeg-location --js-runtimes deno:`, 추출 인자(`--embed-metadata`, `-P home:/temp:`, `-o %(id)s.%(ext)s`, 진행률·결과 경로 템플릿)
+- `Stow/Core/Engine/ProgressParser.swift`: `[stow:download]`, `[stow:postprocess]`, `[stow:file]` 표식 줄만 해석 → `ExtractProgress`(downloading/converting/embeddingMetadata). 다운로드 진행은 stdout, 후처리 진행은 stderr로 나온다
+- `Stow/Core/Engine/YtDlpClient.swift`: `fetchMetadata`(재생목록·라이브 거부), `extract`(임시 폴더 → 이동, 취소 시 `CancellationError`), `FileNaming.sanitize`(`/`·`:` → `-`, 제어 문자·앞 점 제거, 200바이트 제한)
+- `Stow/Core/Engine/EngineError.swift`: 사용자용 오류 21종과 한국어 문구, `YtDlpErrorMapper`(stderr `ERROR:` 줄 분류, 못 하면 `.unknown(원문)`)
+- `EngineLocator.ytDlpCommand`: `python3 -I -B -X utf8 yt-dlp ...`(Finder 실행 시 로케일과 무관하게 UTF-8)
+- `scripts/build-ffmpeg.sh`: `ffmetadata` 디먹서 추가(챕터 삽입용)
+- 테스트: `StowTests/ExtractCoreTests.swift`(URL·진행률·오류 매핑·메타데이터·인자·파일명), `StowTests/YtDlpClientTests.swift`(로컬 WAV를 `file://`로 넘기는 오프라인 E2E, 네트워크 테스트)
+
+## 2단계 요약 (상세는 PR #3, PROJECT.md 5장)
+- 엔진: yt-dlp 2026.10.26(zipimport) + Python 3.13.18(GPL `_dbm` 제거), deno 2.9.8, ffmpeg 9.0.2 + libmp3lame 3.100(LGPL 정적 빌드). 원본은 `engine/`(git 미포함), 빌드 단계 `scripts/embed-engine.sh`가 번들 `Contents/Resources/bin/`에 복사·서명
+- `ProcessRunner`: posix_spawn, 새 프로세스 그룹, 줄 단위 출력(`\n`·`\r`), 취소 시 그룹 SIGTERM → 유예 후 SIGKILL
 
 ## 빌드·테스트 명령
 ```bash
@@ -38,38 +41,41 @@ scripts/fetch-binaries.sh   # 처음 한 번, 또는 버전 변경 시
 scripts/build-ffmpeg.sh     # 처음 한 번, 또는 구성 변경 시
 xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData build
 xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData test
+
+# 네트워크 통합 테스트(실제 유튜브, 기본 test에서는 건너뜀). 결과 파일을 OUTPUT 폴더에 남긴다.
+TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TEST_OUTPUT=<폴더> \
+  xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arch=arm64' \
+  -derivedDataPath build/DerivedData test -only-testing:StowTests/YtDlpClientNetworkTests
 ```
 
 ## 테스트 결과 (2026-11-14, 로컬)
-- Debug `test`: 21개 통과(스모크 3, ProcessRunner 10, 엔진 8)
-  - 앱 안에서 `yt-dlp --version`(2026.10.26), `ffmpeg -version`, `ffprobe -version`, deno JS 실행, Python 확장 모듈 로드
-  - ffmpeg: GPL/nonfree/version3 없음, LGPL 라이선스, libmp3lame·flac·pcm 인코더 있음
-  - 취소: 자식과 손자 프로세스 모두 종료, SIGTERM 무시 프로세스도 SIGKILL로 종료
-  - 리더가 끝난 뒤 남은 손자가 종료 이벤트를 막지 않음, `\r` 진행률 줄 분리
-- Release 빌드: 엔진 Mach-O 4개(python3.13, deno, ffmpeg, ffprobe) 모두 `adhoc,runtime`, `codesign --verify --deep --strict` 통과, 번들 안에서 실행 확인. 앱 크기 약 129MB(deno 81MB, Python 39MB)
-- 테스트 실행 후에도 앱 서명 유효(-B로 번들 안에 .pyc를 쓰지 않음)
+- Debug `test`: 44개 통과(매개변수 테스트는 1개로 셈), 네트워크 테스트 1개는 건너뜀
+  - 오프라인 E2E: MP3 320/128, WAV, FLAC 각각 변환·메타데이터·이동·Core Audio 디코딩 확인, 충돌 시 `(2)`·`(3)`, 실패 시 저장 위치에 파일 없음
+- 네트워크 테스트(사용자 제공 URL `https://www.youtube.com/watch?v=B5cvbwOmfY0`, "Heya" 325초): 통과(33초)
+  - MP3 320,076bps, WAV pcm_s16le, FLAC — 모두 48kHz 스테레오, 길이 325.0초, 제목·아티스트·날짜 태그 있음, Core Audio로 끝까지 디코딩됨
+  - yt-dlp가 번들 deno로 유튜브 JS 챌린지 처리 확인(`-v`: `Solving JS challenges using deno`), 경고 없음
+  - 사람이 직접 듣는 확인은 사용자에게 요청(결과 파일은 세션 임시 폴더에 있었음)
 
 ## 확인된 개발 환경
 - macOS 26.6.2(arm64), Xcode 27.2, Swift 6.4.2, git 2.54, Homebrew
 - 시스템에 ffmpeg, yt-dlp 없음. 엔진은 `engine/`에만 있음
 
 ## CI
-- `.github/workflows/ci.yml`: 러너 `macos-26`, Xcode 26.6으로 고정(로컬은 27.2). 엔진 준비 → Debug 테스트 → Release 빌드 → 바이너리·엔진 검증
+- `.github/workflows/ci.yml`: 러너 `macos-26`, Xcode 26.6으로 고정(로컬은 27.2). 엔진 준비(캐시) → Debug 테스트 → Release 빌드 → 바이너리·엔진 검증. 네트워크 테스트는 CI에서 실행하지 않음
 - PR에서만 실행(병합 후 main 재실행 없음). 검증 범위 기준은 `CONTEXT_GUIDE.md` 5장
-- 로컬과 CI의 Xcode 버전이 다르므로, 최신 SDK 기능은 CI에서 실패할 수 있음. Xcode를 올릴 때는 워크플로의 `XCODE_APP`도 함께 갱신
 
 ## 미해결 문제 / 주의
-- xcodebuild 실행 시 `DVTCoreDeviceCore` 플러그인 로드 실패, `CoreSimulator is out of date` 경고가 나옴. macOS 빌드와 테스트에는 영향 없음. `xcodebuild -runFirstLaunch`로 해결될 가능성이 있음(미확인)
-- Developer ID 서명에서 Python 확장 모듈 로드(라이브러리 검증 통과)와 공증은 아직 확인하지 않음 → 5단계에서 확인
-- ffmpeg는 필요한 구성 요소만 켰다. 3단계 실제 추출에서 빠진 디먹서·디코더가 드러나면 `build-ffmpeg.sh`에 추가. 특히 메타데이터·챕터 삽입(`--embed-metadata`: ffmetadata 디먹서)과 썸네일 삽입(`--embed-thumbnail`: image2·mjpeg·png 등)은 현재 빌드로는 실패하므로, 이 기능을 쓸지 3단계에서 결정하고 필요하면 추가(코드 리뷰 지적, 보류)
-- `ProcessRunner`의 파이프는 `pipe()` 뒤 `FD_CLOEXEC`를 설정한다(macOS에 `pipe2` 없음). 그 사이 앱의 다른 곳에서 fork/exec하면 fd가 샐 수 있으나, 리더 종료 후 유예 시간이 지나면 종료를 알리므로 멈추지는 않음
-- yt-dlp는 사용자 설정 파일(`~/.config/yt-dlp/config` 등)을 읽는다 → 3단계 인자 생성 시 `--ignore-config` 사용 필요
+- xcodebuild 실행 시 `DVTCoreDeviceCore` 플러그인 로드 실패, `CoreSimulator is out of date` 경고가 나옴. macOS 빌드와 테스트에는 영향 없음(미확인 해결책: `xcodebuild -runFirstLaunch`)
+- Developer ID 서명에서 Python 확장 모듈 로드와 공증은 아직 확인하지 않음 → 5단계에서 확인
+- `YtDlpErrorMapper` 문구 규칙은 yt-dlp 문구에 의존한다. 엔진을 올릴 때 4단계 수동 시나리오(비공개·연령 제한·네트워크 끊김)로 다시 확인
+- 비공개·연령 제한·네트워크 끊김 오류는 실제 영상으로 확인하지 않았다(단위 테스트로 문구만 확인) → 4단계 수동 시나리오에서 확인
+- WAV는 원본(유튜브 opus/AAC, 보통 48kHz)을 16비트로 저장한다. 샘플레이트·비트 깊이 옵션은 미정(PROJECT.md 8장)
+- `ProcessRunner`의 파이프는 `pipe()` 뒤 `FD_CLOEXEC`를 설정한다(macOS에 `pipe2` 없음). 그 사이 다른 곳에서 fork/exec하면 fd가 샐 수 있으나 유예 시간 뒤 종료를 알리므로 멈추지는 않음
 - 오픈소스 고지 표시 방법, LGPL 소스 제공 방식 미정(라이선스 원문은 번들 `bin/licenses/`에 포함)
-- 번들 ID는 임시값. 5단계 전에 확정 필요
-- 5단계 전에 Apple Developer 계정(유료) 필요
+- 번들 ID는 임시값, 5단계 전에 Apple Developer 계정 필요
 - 그 밖의 미정 사항은 `PROJECT.md` 8장 참고
 
-## 다음 작업: 3단계 추출 코어 (2단계 PR 병합 후)
-- `YtDlpClient`(메타데이터 `-J`, 추출), 인자 생성(`--ignore-config`, `--ffmpeg-location`, `--js-runtimes deno:<경로>`, `--newline`), `ProgressParser`, `EngineError` 매핑
-- 완료 조건: 실제 영상으로 MP3 320, WAV, FLAC 생성·재생 확인
-- 단위 테스트(픽스처), 네트워크 통합 테스트는 분리
+## 다음 작업: 4단계 UI·설정 (3단계 PR 병합 후)
+- ExtractView/ViewModel(상태: 대기 → 조회 중 → 준비 → 추출 중 → 완료/실패), 포맷·품질 선택, 저장 위치, 설정 기억(`UserDefaults`), 진행률, 취소, 완료 알림, Finder에서 보기, 파일명 충돌 처리 방식 결정, 오류 문구 표시(`EngineError.errorDescription`), 첫 실행 이용 고지
+- ViewModel 테스트용 가짜 엔진이 필요하다 → `YtDlpClient`를 프로토콜로 추상화
+- 완료 조건: PROJECT.md 7장 4단계 수동 시나리오 전체 통과
