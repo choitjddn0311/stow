@@ -4,7 +4,7 @@
 
 ## 현재 상태
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
-- **UI 다듬기 진행 중** (브랜치 `feat/ui-polish`, PR 검증 전): Apple HIG 기준 A안(시스템 설정형) 적용, 사용자 확인("좋아", 2026-11-14)
+- **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
 - 설계와 로드맵: `PROJECT.md` 참고. MVP 이후 로드맵에 "글로벌 단축키 플로팅 패널" 추가(사용자 요청 2026-11-14, 세부 사항 미정)
 
 ## 로드맵 진행 상황
@@ -14,10 +14,11 @@
 | 2. 엔진 번들링 | **완료** (2026-11-14, PR #3) |
 | 3. 추출 코어 | **완료** (2026-11-14, PR #4) |
 | 4. UI·설정 | **완료** (2026-11-14, PR #6) |
-| (UI 다듬기) | A안 구현, PR 검증 전 |
-| 5. 배포 | 미착수 |
+| (UI 다듬기) | **완료** (2026-11-14, PR #7) |
+| 5a. 배포(계정 없이) | 미착수 ← 다음 |
+| 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
 
-## UI 다듬기 (2026-11-14, `feat/ui-polish`)
+## UI 다듬기 (2026-11-14, PR #7)
 - 시안 캔버스(Artifact, 비공개): https://claude.ai/artifact/8hdHa6wfW8TngvMrB9DAq2 — A 시스템 설정형, B 중앙 카드형, C 툴바 통합형, 공통 이용 고지. 디자인 시스템은 쓰지 않고 Apple HIG 기준(사용자 선택)
 - 경과: B안을 먼저 구현(`5047a33`)했으나 사용자가 실제 화면을 보고 "없어 보인다"고 해 A안으로 교체(`9b5d76a`)
 - A안 구현(`Stow/Features/Extract/ExtractView.swift`, 뷰만 변경, ViewModel·설정·코어는 그대로)
@@ -127,10 +128,11 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - WAV는 원본(유튜브 opus/AAC, 보통 48kHz)을 16비트로 저장한다. 샘플레이트·비트 깊이 옵션은 미정(PROJECT.md 8장)
 - `ProcessRunner`의 파이프는 `pipe()` 뒤 `FD_CLOEXEC`를 설정한다(macOS에 `pipe2` 없음). 그 사이 다른 곳에서 fork/exec하면 fd가 샐 수 있으나 유예 시간 뒤 종료를 알리므로 멈추지는 않음
 - 오픈소스 고지 표시 방법, LGPL 소스 제공 방식 미정(라이선스 원문은 번들 `bin/licenses/`에 포함)
-- 번들 ID는 임시값, 5단계 전에 Apple Developer 계정 필요
+- 번들 ID 확정: `io.github.choitjddn0311.stow`(사용자 결정 2026-11-14). 코드는 아직 임시값 `com.example.stow` → 5a 첫 작업으로 적용(테스트 대상은 `.tests`). 적용 후에는 개발 중 저장된 설정이 새 ID로 옮겨지지 않으며, 첫 실행 고지를 다시 보려면 `defaults delete io.github.choitjddn0311.stow`. Apple Developer 계정은 5b(서명·공증)에서만 필요
 - 그 밖의 미정 사항은 `PROJECT.md` 8장 참고
 
 ## 다음 작업
-- UI 다듬기 마무리: PR → CI → 코드 리뷰 → 사용자 승인 후 병합
-- 5단계 배포: Apple Developer 계정 필요(사용자 준비), 번들 ID 확정, Developer ID 서명·공증·DMG, Developer ID 서명에서 Python 확장 모듈 로드 확인
+- (완료) UI 다듬기: PR #7 병합
+- 5a 배포(계정 없이, 사용자 결정 2026-11-14): 번들 ID 적용 → Release 빌드·DMG·`release.sh`·GitHub Releases 업로드 → 설치 안내("그래도 열기") → 다른 기기·계정에서 설치 테스트
+- 5b 서명·공증(계정 준비 후): Developer ID 서명·공증·stapler, Developer ID 서명에서 Python 확장 모듈 로드 확인
 - MVP 이후: PROJECT.md 2장 목록(엔진 업데이트, Sparkle, 대기열, 결제, 글로벌 단축키 플로팅 패널 등). 글로벌 단축키 패널은 시작 전에 PROJECT.md 8장의 미정 사항을 사용자와 정한다
