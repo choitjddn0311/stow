@@ -44,6 +44,13 @@ jobs:
             engine
           key: engine-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-binaries.sh', 'scripts/build-ffmpeg.sh', 'scripts/lib/common.sh') }}
 
+      # 스크립트에서 변수 바로 뒤에 한글(비ASCII)이 붙은 곳을 찾는다. bash는 이를 변수 이름의 일부로 읽는다.
+      - name: Lint scripts
+        run: |
+          if perl -ne 'print "$ARGV:$.: $_" if /\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/; close ARGV if eof' scripts/*.sh scripts/lib/*.sh | grep .; then
+            echo "::error::변수 바로 뒤에 한글이 있습니다. \${VAR} 형태로 쓰세요."; exit 1
+          fi
+
       - name: Fetch engine binaries
         run: scripts/fetch-binaries.sh
 

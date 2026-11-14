@@ -42,8 +42,9 @@ log "Stow $VERSION 배포 파일을 만듭니다 ($(git rev-parse --short HEAD))
 
 if [[ $PUBLISH == 1 ]]; then
   # 릴리스가 없어도 태그가 남아 있으면 gh가 그 태그(다른 커밋일 수 있음)에 DMG를 붙이므로 태그도 확인한다.
-  if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || [[ -n $(git ls-remote --tags origin "refs/tags/$TAG") ]]; then
-    die "태그 $TAG가 이미 있습니다. 버전(MARKETING_VERSION)을 올리세요."
+  remote_tag=$(git ls-remote --tags origin "refs/tags/$TAG") || die "원격 태그를 확인하지 못했습니다(네트워크·인증 확인)."
+  if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || [[ -n $remote_tag ]]; then
+    die "태그 ${TAG}가 이미 있습니다. 버전(MARKETING_VERSION)을 올리세요."
   fi
   release_check=$(gh release view "$TAG" 2>&1) && die "GitHub에 $TAG 릴리스가 이미 있습니다. 버전(MARKETING_VERSION)을 올리세요."
   grep -qi "not found" <<<"$release_check" || die "GitHub 릴리스를 확인하지 못했습니다: $release_check"
@@ -77,7 +78,7 @@ for f in "$APP" "$python_bin" "$BIN/deno" "$BIN/ffmpeg" "$BIN/ffprobe"; do
   flags=$(codesign -dv "$f" 2>&1 | grep -o 'flags=[^ ]*' || true)
   [[ $flags == *runtime* ]] || die "Hardened Runtime 미적용 또는 서명 없음: $f (${flags:-서명 정보 없음})"
 done
-"$BIN/python/bin/python3" -I -B "$BIN/yt-dlp" --version >/dev/null || die "yt-dlp 실행 실패"
+"$python_bin" -I -B "$BIN/yt-dlp" --version >/dev/null || die "yt-dlp 실행 실패"
 [[ $("$BIN/deno" eval 'console.log(6*7)') == 42 ]] || die "deno 실행 실패"
 conf=$("$BIN/ffmpeg" -hide_banner -buildconf)
 if grep -qE -- '--enable-(gpl|nonfree|version3)' <<<"$conf"; then die "ffmpeg 구성에 GPL/nonfree/version3 포함"; fi
@@ -123,5 +124,5 @@ SHA-256: \`$(cut -d' ' -f1 "$DMG.sha256")\`
 EOF
   gh release create "$TAG" "$DMG" "$DMG.sha256" --draft --title "Stow $VERSION" \
     --notes-file "$notes" --target "$(git rev-parse HEAD)"
-  log "GitHub Releases에 초안 $TAG를 만들었습니다. GitHub에서 확인한 뒤 공개하세요."
+  log "GitHub Releases에 초안 ${TAG}를 만들었습니다. GitHub에서 확인한 뒤 공개하세요."
 fi
