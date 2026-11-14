@@ -28,6 +28,11 @@ jobs:
 
       - name: Select Xcode
         run: |
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::error::$XCODE_APP 이 러너 이미지에 없습니다. 사용 가능한 Xcode:"
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
           sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
           swift --version
@@ -50,3 +55,17 @@ jobs:
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/DerivedData \
             build
+
+      - name: Verify Release binary
+        run: |
+          APP=build/DerivedData/Build/Products/Release/Stow.app
+          ARCHS=$(lipo -archs "$APP/Contents/MacOS/Stow")
+          echo "archs: $ARCHS"
+          [ "$ARCHS" = "arm64" ] || { echo "::error::arm64 전용이 아님: $ARCHS"; exit 1; }
+          FLAGS=$(codesign -dv "$APP" 2>&1 | grep flags=)
+          echo "$FLAGS"
+          echo "$FLAGS" | grep -q runtime || { echo "::error::Hardened Runtime 미적용"; exit 1; }
+          if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q app-sandbox; then
+            echo "::error::샌드박스 엔타이틀먼트가 포함됨"; exit 1
+          fi
+          echo "LSMinimumSystemVersion: $(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")"

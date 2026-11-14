@@ -21,7 +21,9 @@
 - `Stow/App/StowApp.swift`, `Stow/App/RootView.swift`(임시 화면, 4단계에서 교체)
 - `Stow/Assets.xcassets`: AppIcon 빈 슬롯, AccentColor
 - `StowTests/StowSmokeTests.swift`: 스모크 테스트 3개
-- `.gitignore`: Xcode 항목 추가. git 저장소 초기화(`main`), **커밋은 아직 없음**
+- `.gitignore`: Xcode 항목, 개인 가이드 파일(`00_`, `01_`) 제외
+- `.github/workflows/ci.yml`, `.github/pull_request_template.md`: PR 검증 CI와 템플릿
+- GitHub 저장소 `choitjddn0311/stow`(Public), `main` 브랜치 보호. 1단계는 PR #1로 병합
 
 ## 빌드·테스트 명령
 ```bash
@@ -31,13 +33,13 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 
 ## 테스트 결과 (2026-11-14)
 - Debug·Release 빌드 성공
-- `test`: 3개 테스트 통과(번들 ID, 최소 OS 14.0, RootView 생성)
+- `test`: 3개 테스트 통과(앱 호스팅 실행, 최소 OS 14 파싱 비교, RootView 실제 렌더링 픽셀 확인). 번들 ID 값 자체는 테스트하지 않음
 - 바이너리 아키텍처: `arm64`만
 - `LSMinimumSystemVersion` 14.0
 - 샌드박스 엔타이틀먼트 없음
-- Release 빌드 서명 플래그 `adhoc,runtime`(Hardened Runtime 적용). Debug는 Xcode가 자동으로 끔(PROJECT.md 5장)
+- Release 빌드 서명 플래그 `adhoc,runtime`(Hardened Runtime 적용). Debug는 Xcode가 자동으로 끔(PROJECT.md 5장). arm64·runtime·샌드박스 없음은 CI `Verify Release binary` 단계에서 자동 확인
 - 앱 실행 시 창 표시 확인(스크린샷)
-- Xcode GUI에서 프로젝트 열기: **사용자 확인 필요**
+- Xcode GUI에서 앱 실행: 사용자 확인 완료(2026-11-14, "앱 잘 뜸")
 
 ## 확인된 개발 환경
 - macOS 26.6.2(arm64), Xcode 27.2, Swift 6.4.2, git 2.54, Homebrew

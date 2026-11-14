@@ -22,12 +22,31 @@ struct StowSmokeTests {
         #expect(parts.dropFirst().allSatisfy { $0 == 0 })
     }
 
-    /// 루트 화면을 실제로 호스팅해 레이아웃까지 수행되는지 확인한다.
-    @Test func rootViewLaysOut() {
-        let host = NSHostingView(rootView: RootView())
-        host.frame = NSRect(x: 0, y: 0, width: 480, height: 360)
-        host.layoutSubtreeIfNeeded()
-        #expect(host.fittingSize.width >= 420)
-        #expect(host.fittingSize.height >= 300)
+    /// 루트 화면을 실제로 렌더링해 내용(텍스트)이 그려지는지 확인한다.
+    /// 배경이 투명하므로, 그려진 픽셀(알파 > 0)이 없으면 화면 내용이 비어 있는 것이다.
+    @Test func rootViewRendersContent() throws {
+        let renderer = ImageRenderer(content: RootView())
+        renderer.scale = 1
+        let image = try #require(renderer.cgImage)
+        #expect(image.width >= 420)
+        #expect(image.height >= 300)
+        #expect(Self.drawnPixelCount(in: image) > 0)
+    }
+
+    private static func drawnPixelCount(in image: CGImage) -> Int {
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height,
+                bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return 0 }
+        return stride(from: 3, to: pixels.count, by: 4).reduce(0) { $0 + (pixels[$1] > 0 ? 1 : 0) }
     }
 }
