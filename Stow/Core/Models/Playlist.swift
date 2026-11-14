@@ -2,9 +2,16 @@ import Foundation
 
 /// 재생목록(`yt-dlp -J --flat-playlist`). 영상 정보는 목록에 나오는 만큼만 있다(썸네일·채널 없음).
 struct Playlist: Sendable, Equatable {
+    /// 한 번에 불러오는 영상 수 상한(`YtDlpArguments`의 `--playlist-end`). 아주 큰 재생목록이 화면을 멈추지 않게 한다.
+    static let maxEntries = 500
+
     var id: String
     var title: String
     var entries: [PlaylistEntry]
+    /// 재생목록 전체 영상 수(yt-dlp `playlist_count`). 상한 때문에 일부만 불러왔으면 `entries.count`보다 크다.
+    var totalCount: Int? = nil
+
+    var isTruncated: Bool { (totalCount ?? 0) > entries.count }
 }
 
 /// 재생목록 안의 영상 하나.
@@ -21,10 +28,10 @@ struct PlaylistEntry: Sendable, Equatable, Identifiable {
         title.hasPrefix("[Private") || title.hasPrefix("[Deleted") || title.hasPrefix("[Unavailable")
     }
 
-    /// 유튜브 영상 ID 형식(영문·숫자·`-`·`_`). 다른 문자가 섞인 항목은 주소를 만들지 않는다.
+    /// 유튜브 영상 ID 형식: 영문·숫자·`-`·`_` 11자. 재생목록(`PL…`)·채널(`UC…`) ID는 길이가 달라 걸러진다.
     static func isValidID(_ id: String) -> Bool {
-        !id.isEmpty && id.count <= 64 && id.unicodeScalars.allSatisfy {
-            CharacterSet.alphanumerics.contains($0) && $0.isASCII || $0 == "-" || $0 == "_"
+        id.count == 11 && id.unicodeScalars.allSatisfy {
+            ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "-" || $0 == "_"
         }
     }
 }
@@ -56,17 +63,27 @@ extension FetchedMedia: Decodable {
 extension Playlist: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, title, entries
+        case totalCount = "playlist_count"
     }
 
-    /// 항목 하나를 해석하지 못해도 나머지는 살린다.
+    /// 항목 하나를 해석하지 못해도 나머지는 살린다. 영상이 아닌 항목(하위 재생목록, 채널 탭)은 뺀다.
     private struct LenientEntry: Decodable {
         let entry: PlaylistEntry?
 
-        private enum CodingKeys: String, CodingKey { case id, title, duration }
+        private enum CodingKeys: String, CodingKey {
+            case id, title, duration
+            case type = "_type"
+            case extractor = "ie_key"
+        }
 
         init(from decoder: any Decoder) throws {
             let container = try? decoder.container(keyedBy: CodingKeys.self)
-            guard let id = try? container?.decode(String.self, forKey: .id), PlaylistEntry.isValidID(id) else {
+            let type = (try? container?.decodeIfPresent(String.self, forKey: .type)) ?? nil
+            let extractor = (try? container?.decodeIfPresent(String.self, forKey: .extractor)) ?? nil
+            guard type == nil || type == "url" || type == "video",
+                  extractor == nil || extractor == "Youtube",
+                  let id = try? container?.decode(String.self, forKey: .id), PlaylistEntry.isValidID(id)
+            else {
                 entry = nil
                 return
             }
@@ -80,6 +97,11 @@ extension Playlist: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? id
-        entries = (try container.decodeIfPresent([LenientEntry].self, forKey: .entries) ?? []).compactMap(\.entry)
+        // 같은 영상이 두 번 들어 있으면 처음 것만 남긴다(선택·화면이 ID로 구분하므로).
+        var seen = Set<String>()
+        entries = (try container.decodeIfPresent([LenientEntry].self, forKey: .entries) ?? [])
+            .compactMap(\.entry)
+            .filter { seen.insert($0.id).inserted }
+        totalCount = try container.decodeIfPresent(Int.self, forKey: .totalCount)
     }
 }

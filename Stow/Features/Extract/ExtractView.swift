@@ -109,7 +109,7 @@ struct ExtractView: View {
         HStack(spacing: 12) {
             summary
             Spacer(minLength: 8)
-            if model.canAddToQueue || model.stage == .video || model.stage == .playlist {
+            if model.stage == .video || model.stage == .playlist {
                 Button {
                     model.addToQueue()
                 } label: {
@@ -186,6 +186,11 @@ private struct PlaylistHeaderRow: View {
                 Text("영상 \(playlist.entries.count)개 · \(model.pendingAddCount)개 선택")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                if playlist.isTruncated {
+                    Text("영상이 많아 처음 \(playlist.entries.count)개만 불러왔습니다(전체 \(playlist.totalCount ?? 0)개).")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
                 Text("저장 위치 아래 \"\(FileNaming.sanitize(playlist.title))\" 폴더에 저장합니다.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -269,10 +274,10 @@ private struct QueueRow: View {
                 Text(item.title)
                     .lineLimit(1)
                     .help(item.title)
-                if case .running(.downloading(let fraction?, _, _)) = item.status {
+                if item.status == .running, case .downloading(let fraction?, _, _) = item.progress.value {
                     ProgressView(value: fraction)
                         .controlSize(.small)
-                } else if case .running = item.status {
+                } else if item.status == .running {
                     ProgressView()
                         .progressViewStyle(.linear)
                         .controlSize(.small)
@@ -336,8 +341,8 @@ private struct QueueRow: View {
         switch item.status {
         case .waiting:
             return "대기 중 · \(format)"
-        case .running(let progress):
-            return ProgressText.text(for: progress, format: item.options.format)
+        case .running:
+            return ProgressText.text(for: item.progress.value, format: item.options.format)
         case .completed(let file):
             return "저장했습니다: \(file.lastPathComponent)"
         case .failed(let error):

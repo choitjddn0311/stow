@@ -18,11 +18,15 @@ struct YtDlpArguments: Sendable {
         ] + additional
     }
 
-    /// 영상 정보 조회(`-J`): 한 줄 JSON을 stdout에 출력한다.
-    /// `--flat-playlist`: 재생목록 주소가 들어와도 각 영상을 조회하지 않고 목록만 읽어 바로 끝낸다
-    /// (`_type`이 playlist이므로 `VideoMetadata`가 거부한다).
+    /// 영상·재생목록 조회(`-J`): 한 줄 JSON을 stdout에 출력한다. `FetchedMedia`가 `_type`으로 구분한다.
+    /// - 영상 주소(`watch?v=…&list=…` 포함): 공통 인자의 `--no-playlist` 때문에 영상 하나로 조회된다.
+    /// - 재생목록 주소(`/playlist?list=…`): `--no-playlist`와 관계없이 재생목록으로 조회된다.
+    ///   `--flat-playlist`로 각 영상을 조회하지 않고 목록만 읽고, `--playlist-end`로 처음 `Playlist.maxEntries`개까지만 읽는다.
     func metadata(for url: URL) -> [String] {
-        common + ["--dump-single-json", "--flat-playlist", "--", url.absoluteString]
+        common + [
+            "--dump-single-json", "--flat-playlist", "--playlist-end", String(Playlist.maxEntries),
+            "--", url.absoluteString,
+        ]
     }
 
     /// 오디오 추출. 작업 폴더에 `<영상 ID>.<확장자>`로 저장한다(최종 이름은 호출한 쪽에서 정한다).

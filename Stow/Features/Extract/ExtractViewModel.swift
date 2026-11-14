@@ -82,7 +82,8 @@ final class ExtractViewModel {
     var pendingAddCount: Int {
         switch state {
         case .video: 1
-        case .playlist(let playlist): playlist.entries.filter { selectedEntryIDs.contains($0.id) }.count
+        // 선택은 재생목록 항목 ID만 담으므로 바로 센다(큰 재생목록에서도 화면을 그릴 때마다 목록을 훑지 않게).
+        case .playlist: selectedEntryIDs.count
         default: 0
         }
     }

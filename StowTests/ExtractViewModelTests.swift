@@ -348,10 +348,11 @@ struct ExtractQueueTests {
         let engine = FakeEngine(progressEvents: [.converting], extractGate: gate)
         let queue = ExtractQueue(engine: engine, notifier: RecordingNotifier())
         queue.add([item("a")])
-        for _ in 0..<300 where queue.items[0].status != .running(.converting) {
+        for _ in 0..<300 where queue.items[0].progress.value != .converting {
             try? await Task.sleep(for: .milliseconds(10))
         }
-        #expect(queue.items[0].status == .running(.converting))
+        #expect(queue.items[0].status == .running)
+        #expect(queue.items[0].progress.value == .converting)
         gate.open()
         await queue.waitUntilIdle()
     }
@@ -521,4 +522,63 @@ final class SilentNotifier: CompletionNotifying {
     func prepare() {}
     func notifyCompleted(title: String, file: URL) {}
     func revealInFinder(_ file: URL) {}
+}
+
+/// 코드 리뷰(PR #15) 반영 확인: 일시 정지 중 사용자 동작으로 재개, 다시 시도 시 이전 진행률 초기화.
+@MainActor
+struct ExtractQueueReviewTests {
+    private func item(_ title: String) -> ExtractQueue.Item {
+        ExtractQueue.Item(
+            url: URL(string: "https://youtu.be/\(title)")!, title: title,
+            options: ExtractOptions(format: .mp3(.kbps320), outputDirectory: testOutputDirectory)
+        )
+    }
+
+    @Test func addingWhilePausedResumesQueue() async {
+        let engine = FakeEngine(extractResult: .failure(.blockedByYouTube))
+        let queue = ExtractQueue(engine: engine, notifier: RecordingNotifier())
+        queue.add([item("a")])
+        await queue.waitUntilIdle()
+        #expect(queue.isPaused)
+
+        engine.extractResult = .success(())
+        queue.add([item("b")])  // "나중에"를 고른 뒤 새로 추가해도 멈춰 있지 않는다
+        await queue.waitUntilIdle()
+        #expect(!queue.isPaused)
+        #expect(queue.completedCount == 2)  // 차단으로 실패했던 a도 다시 시도된다
+    }
+
+    @Test func retryWhilePausedResumesQueue() async {
+        let engine = FakeEngine(extractResult: .failure(.blockedByYouTube))
+        let queue = ExtractQueue(engine: engine, notifier: RecordingNotifier())
+        queue.add([item("a")])
+        await queue.waitUntilIdle()
+        engine.extractResult = .success(())
+        queue.retry(queue.items[0].id)
+        await queue.waitUntilIdle()
+        #expect(!queue.isPaused)
+        #expect(queue.completedCount == 1)
+    }
+
+    @Test func retryStartsWithFreshProgress() async {
+        let engine = FakeEngine(progressEvents: [.converting], extractResult: .failure(.network))
+        let queue = ExtractQueue(engine: engine, notifier: RecordingNotifier())
+        queue.add([item("a")])
+        await queue.waitUntilIdle()
+        #expect(queue.items[0].status == .failed(.network))
+
+        let gate = AsyncGate()
+        let retryEngine = FakeEngine(extractGate: gate)  // 진행률을 보내지 않는 엔진
+        let retryQueue = ExtractQueue(engine: retryEngine, notifier: RecordingNotifier())
+        retryQueue.add([item("b")])
+        #expect(retryQueue.items[0].progress.value == nil)
+        gate.open()
+        await retryQueue.waitUntilIdle()
+
+        // 같은 대기열에서 다시 시도하면 시작할 때 진행률을 비운다.
+        queue.retry(queue.items[0].id)
+        #expect(queue.items[0].status == .running)
+        #expect(queue.items[0].progress.value == nil)
+        await queue.waitUntilIdle()
+    }
 }

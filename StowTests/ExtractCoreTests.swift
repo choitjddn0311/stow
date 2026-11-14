@@ -186,13 +186,21 @@ struct VideoMetadataTests {
           {"_type": "url", "id": "abc_DEF-123", "title": "[Private video]", "duration": null},
           {"_type": "url", "title": "ID 없음"},
           {"_type": "url", "id": "../evil", "title": "이상한 ID"},
-          {"_type": "url", "id": "zzz"}
-        ]}
+          {"_type": "url", "id": "zzz"},
+          {"_type": "url", "id": "dQw4w9WgXcQ", "title": "중복"},
+          {"_type": "url", "ie_key": "YoutubeTab", "id": "PLxxxxxxxxx", "title": "하위 재생목록"},
+          {"_type": "playlist", "id": "UCxxxxxxxxx", "title": "채널 탭"},
+          {"_type": "url", "ie_key": "Youtube", "id": "zzzzzzzzzzz"}
+        ], "playlist_count": 900}
         """
         let media = try JSONDecoder().decode(FetchedMedia.self, from: Data(json.utf8))
         guard case .playlist(let playlist) = media else { Issue.record("재생목록으로 해석되지 않음"); return }
         #expect(playlist.title == "내 목록")
-        #expect(playlist.entries.map(\.id) == ["dQw4w9WgXcQ", "abc_DEF-123", "zzz"])
+        // ID 11자만, 중복 제거, 하위 재생목록·채널 탭(ie_key·_type) 제외
+        #expect(playlist.entries.map(\.id) == ["dQw4w9WgXcQ", "abc_DEF-123", "zzzzzzzzzzz"])
+        #expect(playlist.entries[0].title == "첫 곡")
+        #expect(playlist.totalCount == 900)
+        #expect(playlist.isTruncated)
         #expect(playlist.entries[0].duration == 212)
         #expect(playlist.entries[0].url == URL(string: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
         #expect(playlist.entries[1].isUnavailable)
