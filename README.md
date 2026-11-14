@@ -14,12 +14,14 @@
 [Releases](https://github.com/choitjddn0311/stow/releases)에서 `Stow-<버전>.dmg`를 받습니다.
 
 1. DMG를 열고 Stow를 "Applications"(응용 프로그램) 폴더로 끌어다 놓습니다.
-2. Stow를 처음 열면 "악성 코드가 없음을 확인할 수 없습니다"라는 경고가 나오고 열리지 않습니다.
-   아직 Apple 개발자 서명·공증을 받지 않았기 때문입니다. "완료"를 누릅니다.
-3. **시스템 설정 → 개인정보 보호 및 보안**의 "보안" 항목에서 "그래도 열기"를 누르고 암호나 Touch ID로 확인합니다.
-4. 다시 Stow를 열고 "열기"를 누릅니다. 이후에는 경고 없이 열립니다.
+2. Stow는 아직 Apple 개발자 서명·공증을 받지 않아서, 처음 열 때 macOS가 실행을 막습니다. 한 번만 허용해 주세요.
+   - **macOS 15 Sequoia 이후**: Stow를 열면 "악성 코드가 없음을 확인할 수 없습니다" 경고가 나옵니다. "완료"를 누른 뒤
+     **시스템 설정 → 개인정보 보호 및 보안**의 "보안" 항목에서 "그래도 열기"를 누르고 암호나 Touch ID로 확인합니다.
+     다시 Stow를 열고 "열기"를 누릅니다.
+   - **macOS 14 Sonoma**: Finder의 응용 프로그램 폴더에서 Stow를 Control-클릭(또는 우클릭) → "열기" → 경고창에서 "열기"를 누릅니다.
+3. 한 번 열고 나면 이후에는 경고 없이 열립니다.
 
-터미널에 익숙하다면 2~4 대신 `xattr -dr com.apple.quarantine /Applications/Stow.app`로도 열 수 있습니다.
+터미널에 익숙하다면 버전과 관계없이 `xattr -dr com.apple.quarantine /Applications/Stow.app`로도 열 수 있습니다.
 받은 파일이 맞는지는 릴리스에 함께 올린 `.sha256`과 `shasum -a 256 Stow-<버전>.dmg` 결과를 비교해 확인할 수 있습니다.
 
 ## 이용 안내
