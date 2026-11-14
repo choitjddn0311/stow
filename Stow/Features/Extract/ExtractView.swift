@@ -28,7 +28,7 @@ struct ExtractView: View {
             .background(.bar)
         }
         // 상태 전환은 짧게, "동작 줄이기"를 켜면 애니메이션 없이 바꾼다.
-        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: phase)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: model.stage)
         .alert(
             "유튜브가 요청을 막았습니다",
             isPresented: Binding(get: { model.retryAlert != nil }, set: { if !$0 { model.retryAlert = nil } }),
@@ -38,19 +38,6 @@ struct ExtractView: View {
             Button("닫기", role: .cancel) { model.retryAlert = nil }
         } message: { alert in
             Text(alert.message)
-        }
-    }
-
-    /// 애니메이션 기준이 되는 화면 단계(진행률 변화에는 애니메이션하지 않는다).
-    private var phase: Int {
-        switch model.state {
-        case .idle: 0
-        case .fetching: 1
-        case .ready: 2
-        case .extracting: 3
-        case .completed: 4
-        case .failed(_, nil): 5
-        case .failed: 6
         }
     }
 
@@ -75,6 +62,8 @@ struct ExtractView: View {
             if case .completed = model.state { return }
             model.submit()
         }
+        // 묶음 폼의 텍스트 필드는 기본이 오른쪽 정렬이라 긴 주소의 앞부분이 잘려 보인다.
+        .multilineTextAlignment(.leading)
         .disabled(isExtracting)
     }
 
@@ -114,9 +103,11 @@ struct ExtractView: View {
             }
         case .ready:
             HStack {
-                Text("\(folderName)에 저장합니다.")
+                // 폴더가 사라졌는지는 추출을 누를 때 확인하므로(ExtractViewModel.extract), 여기서는 위치만 알린다.
+                Label("저장 위치: \(model.settings.outputFolderName)", systemImage: "folder")
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .help(model.settings.outputDirectory.path)
                 Spacer()
                 extractButton
             }
@@ -143,7 +134,8 @@ struct ExtractView: View {
             .controlSize(.large)
         case .failed(let error, .some):
             HStack {
-                ErrorLabel(error: error)
+                // 아래 고정 바가 커져 "출력" 섹션을 가리지 않도록 최대 3줄, 전체 문구는 도움말로.
+                ErrorLabel(error: error, lineLimit: 3)
                 Spacer(minLength: 8)
                 extractButton
             }
@@ -161,11 +153,6 @@ struct ExtractView: View {
         .controlSize(.large)
         .keyboardShortcut(.defaultAction)
         .disabled(!model.canExtract)
-    }
-
-    /// Finder에 보이는 이름(예: "다운로드").
-    private var folderName: String {
-        FileManager.default.displayName(atPath: model.settings.outputDirectory.path)
     }
 }
 
@@ -218,6 +205,7 @@ private struct VideoRow: View {
                     .font(.headline)
                     .lineLimit(2)
                     .help(metadata.title)
+                    .textSelection(.enabled)  // 제목을 복사할 수 있게
                 if let uploader = metadata.uploader {
                     Text(uploader).foregroundStyle(.secondary)
                 }
@@ -353,11 +341,16 @@ private struct ExtractProgressView: View {
 
 private struct ErrorLabel: View {
     let error: EngineError
+    /// 최대 줄 수. nil이면 제한 없음. 잘리면 전체 문구는 도움말로 볼 수 있다.
+    var lineLimit: Int? = nil
 
     var body: some View {
-        Label(error.errorDescription ?? "오류가 발생했습니다.", systemImage: "exclamationmark.triangle.fill")
+        let message = error.errorDescription ?? "오류가 발생했습니다."
+        Label(message, systemImage: "exclamationmark.triangle.fill")
             .foregroundStyle(.red)
+            .lineLimit(lineLimit)
             .fixedSize(horizontal: false, vertical: true)
+            .help(message)
     }
 }
 

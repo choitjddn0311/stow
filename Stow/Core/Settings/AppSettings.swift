@@ -29,8 +29,15 @@ final class AppSettings {
 
     /// 결과 파일을 저장할 폴더. 기본값은 "다운로드" 폴더.
     var outputDirectory: URL {
-        didSet { defaults.set(outputDirectory.path, forKey: Keys.outputDirectory) }
+        didSet {
+            defaults.set(outputDirectory.path, forKey: Keys.outputDirectory)
+            outputFolderName = Self.folderName(for: outputDirectory)
+        }
     }
+
+    /// Finder에 보이는 저장 폴더 이름(예: "다운로드"). 화면을 그릴 때마다 파일 시스템을 조회하지 않도록
+    /// 저장 위치가 바뀔 때만 계산해 둔다.
+    private(set) var outputFolderName: String
 
     var formatKind: AudioFormatKind {
         didSet { defaults.set(formatKind.rawValue, forKey: Keys.formatKind) }
@@ -48,8 +55,10 @@ final class AppSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        outputDirectory = defaults.string(forKey: Keys.outputDirectory).map { URL(filePath: $0, directoryHint: .isDirectory) }
+        let directory = defaults.string(forKey: Keys.outputDirectory).map { URL(filePath: $0, directoryHint: .isDirectory) }
             ?? Self.defaultOutputDirectory
+        outputDirectory = directory
+        outputFolderName = Self.folderName(for: directory)
         formatKind = defaults.string(forKey: Keys.formatKind).flatMap(AudioFormatKind.init(rawValue:)) ?? .mp3
         mp3Bitrate = MP3Bitrate(rawValue: defaults.integer(forKey: Keys.mp3Bitrate)) ?? .kbps320
         acceptedNoticeVersion = defaults.integer(forKey: Keys.acceptedNoticeVersion)
@@ -66,6 +75,10 @@ final class AppSettings {
 
     var extractOptions: ExtractOptions {
         ExtractOptions(format: format, outputDirectory: outputDirectory)
+    }
+
+    private static func folderName(for url: URL) -> String {
+        FileManager.default.displayName(atPath: url.path)
     }
 
     static var defaultOutputDirectory: URL {

@@ -62,6 +62,23 @@ final class ExtractViewModel {
 
     // MARK: - 화면에서 쓰는 값
 
+    /// 진행률 같은 세부 값을 뺀 화면 단계. 화면 전환 애니메이션의 기준으로 쓴다.
+    enum Stage: Hashable {
+        case idle, fetching, ready, extracting, completed, fetchFailed, extractFailed
+    }
+
+    var stage: Stage {
+        switch state {
+        case .idle: .idle
+        case .fetching: .fetching
+        case .ready: .ready
+        case .extracting: .extracting
+        case .completed: .completed
+        case .failed(_, nil): .fetchFailed
+        case .failed: .extractFailed
+        }
+    }
+
     var isBusy: Bool {
         switch state {
         case .fetching, .extracting: true

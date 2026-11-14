@@ -67,7 +67,9 @@ struct ProcessRunnerTests {
         let start = ContinuousClock.now
         let result = try await runner.run(shell, arguments: ["-c", "sleep 600 & echo $!; exit 0"])
         #expect(result.termination == .exited(0))
-        #expect(ContinuousClock.now - start < .seconds(5))
+        // 손자(sleep 600)를 기다리지 않았는지만 본다. 보통 1초 안이지만, 테스트를 병렬로 돌리는 CI 러너에서
+        // 5.5초가 걸린 적이 있어 600초와 충분히 구분되는 30초를 기준으로 한다.
+        #expect(ContinuousClock.now - start < .seconds(30))
         let grandchild = try #require(result.stdout.first.flatMap { pid_t($0) })
         #expect(await allExited([grandchild]))
     }
