@@ -67,8 +67,9 @@ build() {
     --enable-zlib
     --enable-libmp3lame
     --enable-protocol=file,pipe
-    # 입력: 유튜브 오디오 컨테이너(m4a/mp4, webm, ogg)와 일반 오디오 파일
-    --enable-demuxer=mov,matroska,ogg,mp3,aac,flac,wav,mpegts
+    # 입력: 유튜브 오디오 컨테이너(m4a/mp4, webm, ogg)와 일반 오디오 파일.
+    # ffmetadata: yt-dlp --embed-metadata가 챕터를 넣을 때 읽는 메타데이터 파일
+    --enable-demuxer=mov,matroska,ogg,mp3,aac,flac,wav,mpegts,ffmetadata
     # 출력: MP3·WAV·FLAC, yt-dlp 보정 처리용 mp4/m4a·webm
     --enable-muxer=mp3,wav,flac,mp4,ipod,mov,matroska,webm,ogg
     --enable-decoder=aac,aac_fixed,aac_latm,opus,vorbis,mp3,mp3float,flac,alac,ac3,eac3,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8
