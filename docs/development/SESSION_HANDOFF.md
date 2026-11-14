@@ -23,14 +23,14 @@
 
 ## 2단계에서 만든 파일
 - `scripts/lib/common.sh`: 경로, 체크섬 검증 다운로드, 버전 기록(`engine/.versions/`)
-- `scripts/fetch-binaries.sh`: yt-dlp 2026.10.26(zipimport), Python 3.13.18(python-build-standalone 20261110, 불필요 모듈 제거·표준 라이브러리 미리 컴파일), deno 2.9.8. 버전·SHA256 고정. 로컬 경로가 배포 파일에 남지 않았는지 검사
+- `scripts/fetch-binaries.sh`: yt-dlp 2026.10.26(zipimport), Python 3.13.18(python-build-standalone 20261110, 불필요 모듈 제거, GNU gdbm(GPL)을 포함한 `_dbm` 제거와 GPL 검사, 표준 라이브러리 미리 컴파일), deno 2.9.8. 버전·SHA256 고정. 로컬 경로가 배포 파일에 남지 않았는지 검사
 - `scripts/build-ffmpeg.sh`: ffmpeg 9.0.2 + libmp3lame 3.100 정적 빌드(LGPL, `--disable-everything` 후 필요한 것만, `--disable-autodetect`). 빌드 후 GPL/nonfree/version3, 로컬 경로, arm64, 시스템 외 링크 검사. 로컬 빌드 약 1분
-- `scripts/embed-engine.sh`: Xcode 빌드 단계 "Embed Engine". `engine/` → 번들 `Contents/Resources/bin/` 복사, Mach-O를 Hardened Runtime으로 서명. 변경 없으면 건너뜀(`.embedded` 스탬프). 엔진이 없으면 안내 메시지와 함께 빌드 실패
+- `scripts/embed-engine.sh`: Xcode 빌드 단계 "Embed Engine". `engine/` → 번들 `Contents/Resources/bin/` 복사, Mach-O를 Hardened Runtime으로 서명. 변경 없으면 건너뜀(스탬프는 번들 밖 `DERIVED_FILE_DIR`에 기록, `.versions`는 번들에 넣지 않음). 타임스탬프 서버는 Developer ID 서명에서만 사용. 엔진이 없으면 안내 메시지와 함께 빌드 실패
 - `scripts/entitlements/`: `deno.entitlements`(allow-jit), `python-adhoc.entitlements`(ad-hoc일 때만 disable-library-validation)
-- `Stow/Core/Engine/EngineError.swift`, `EngineLocator.swift`(구성 요소 경로·검증, `ytDlpCommand`는 `python3 -I -B yt-dlp ...`), `ProcessRunner.swift`(posix_spawn, 새 프로세스 그룹, 줄 단위 출력 스트림, 취소 시 그룹 SIGTERM → 유예 후 SIGKILL)
-- `StowTests/ProcessRunnerTests.swift`(8개), `StowTests/EngineBundleTests.swift`(8개)
+- `Stow/Core/Engine/EngineError.swift`, `EngineLocator.swift`(구성 요소 경로·검증, `ytDlpCommand`는 `python3 -I -B yt-dlp ...`), `ProcessRunner.swift`(posix_spawn, 새 프로세스 그룹, 줄 단위 출력 스트림(`\n`·`\r`·`\r\n`), 취소 시 그룹 SIGTERM → 유예 후 SIGKILL, 리더 종료 후 파이프를 쥔 손자가 남으면 유예 후 종료, 리더 회수 후 pgid 재사용 방지)
+- `StowTests/ProcessRunnerTests.swift`(10개), `StowTests/EngineBundleTests.swift`(8개)
 - Xcode: Stow 대상에 "Embed Engine" 빌드 단계, `ENABLE_USER_SCRIPT_SANDBOXING = NO`(Stow 대상만, 스크립트가 `engine/`을 읽기 때문)
-- CI: 엔진 캐시(`build/engine-cache`), 스크립트 실행, Release 번들 엔진 검증 단계 추가. timeout 45분
+- CI: 엔진 캐시(`build/engine-cache`, `engine/`), 스크립트 실행, Release 번들 엔진 검증 단계 추가. timeout 45분
 
 ## 빌드·테스트 명령
 ```bash
@@ -41,11 +41,12 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 ```
 
 ## 테스트 결과 (2026-11-14, 로컬)
-- Debug `test`: 19개 통과(스모크 3, ProcessRunner 8, 엔진 8)
+- Debug `test`: 21개 통과(스모크 3, ProcessRunner 10, 엔진 8)
   - 앱 안에서 `yt-dlp --version`(2026.10.26), `ffmpeg -version`, `ffprobe -version`, deno JS 실행, Python 확장 모듈 로드
   - ffmpeg: GPL/nonfree/version3 없음, LGPL 라이선스, libmp3lame·flac·pcm 인코더 있음
   - 취소: 자식과 손자 프로세스 모두 종료, SIGTERM 무시 프로세스도 SIGKILL로 종료
-- Release 빌드: 엔진 Mach-O 5개 모두 `adhoc,runtime`, `codesign --verify --deep --strict` 통과, 번들 안에서 실행 확인. 앱 크기 약 129MB(deno 81MB, Python 39MB)
+  - 리더가 끝난 뒤 남은 손자가 종료 이벤트를 막지 않음, `\r` 진행률 줄 분리
+- Release 빌드: 엔진 Mach-O 4개(python3.13, deno, ffmpeg, ffprobe) 모두 `adhoc,runtime`, `codesign --verify --deep --strict` 통과, 번들 안에서 실행 확인. 앱 크기 약 129MB(deno 81MB, Python 39MB)
 - 테스트 실행 후에도 앱 서명 유효(-B로 번들 안에 .pyc를 쓰지 않음)
 
 ## 확인된 개발 환경
@@ -60,7 +61,8 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 ## 미해결 문제 / 주의
 - xcodebuild 실행 시 `DVTCoreDeviceCore` 플러그인 로드 실패, `CoreSimulator is out of date` 경고가 나옴. macOS 빌드와 테스트에는 영향 없음. `xcodebuild -runFirstLaunch`로 해결될 가능성이 있음(미확인)
 - Developer ID 서명에서 Python 확장 모듈 로드(라이브러리 검증 통과)와 공증은 아직 확인하지 않음 → 5단계에서 확인
-- ffmpeg는 필요한 구성 요소만 켰다. 3단계 실제 추출에서 빠진 디먹서·디코더가 드러나면 `build-ffmpeg.sh`에 추가
+- ffmpeg는 필요한 구성 요소만 켰다. 3단계 실제 추출에서 빠진 디먹서·디코더가 드러나면 `build-ffmpeg.sh`에 추가. 특히 메타데이터·챕터 삽입(`--embed-metadata`: ffmetadata 디먹서)과 썸네일 삽입(`--embed-thumbnail`: image2·mjpeg·png 등)은 현재 빌드로는 실패하므로, 이 기능을 쓸지 3단계에서 결정하고 필요하면 추가(코드 리뷰 지적, 보류)
+- `ProcessRunner`의 파이프는 `pipe()` 뒤 `FD_CLOEXEC`를 설정한다(macOS에 `pipe2` 없음). 그 사이 앱의 다른 곳에서 fork/exec하면 fd가 샐 수 있으나, 리더 종료 후 유예 시간이 지나면 종료를 알리므로 멈추지는 않음
 - yt-dlp는 사용자 설정 파일(`~/.config/yt-dlp/config` 등)을 읽는다 → 3단계 인자 생성 시 `--ignore-config` 사용 필요
 - 오픈소스 고지 표시 방법, LGPL 소스 제공 방식 미정(라이선스 원문은 번들 `bin/licenses/`에 포함)
 - 번들 ID는 임시값. 5단계 전에 확정 필요

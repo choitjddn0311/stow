@@ -35,11 +35,13 @@ jobs:
           xcodebuild -version
           swift --version
 
-      # 엔진 다운로드와 ffmpeg 빌드 결과를 캐시한다. 스크립트가 바뀌면 키가 바뀌어 다시 받는다/빌드한다.
+      # 엔진 다운로드·빌드 캐시와 준비된 engine/을 함께 캐시한다. 스크립트가 바뀌면 키가 바뀌어 다시 준비한다.
       - name: Cache engine
         uses: actions/cache@v4
         with:
-          path: build/engine-cache
+          path: |
+            build/engine-cache
+            engine
           key: engine-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-binaries.sh', 'scripts/build-ffmpeg.sh', 'scripts/lib/common.sh') }}
 
       - name: Fetch engine binaries

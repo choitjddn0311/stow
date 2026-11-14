@@ -52,6 +52,26 @@ struct ProcessRunnerTests {
         #expect(splitter.finish() == nil)
     }
 
+    /// `\r`로 같은 줄을 다시 그리는 진행률 출력도 갱신마다 한 줄로 나온다. `\r\n`이 청크 경계에서 나뉘어도 한 번만 끊는다.
+    @Test func splitsOnCarriageReturn() {
+        var splitter = LineSplitter()
+        #expect(splitter.append(Array("10%\r20%\r30%".utf8)) == ["10%", "20%"])
+        #expect(splitter.append(Array("\r".utf8)) == ["30%"])
+        #expect(splitter.append(Array("\nnext\n".utf8)) == ["next"])
+        #expect(splitter.finish() == nil)
+    }
+
+    /// 프로세스가 끝났는데 손자가 출력 파이프를 쥐고 남아 있어도 종료가 전달되고, 손자는 종료된다.
+    @Test func leftoverGrandchildDoesNotBlockTermination() async throws {
+        let runner = ProcessRunner(terminationGracePeriod: .milliseconds(300))
+        let start = ContinuousClock.now
+        let result = try await runner.run(shell, arguments: ["-c", "sleep 600 & echo $!; exit 0"])
+        #expect(result.termination == .exited(0))
+        #expect(ContinuousClock.now - start < .seconds(5))
+        let grandchild = try #require(result.stdout.first.flatMap { pid_t($0) })
+        #expect(await allExited([grandchild]))
+    }
+
     /// 취소하면 자식과 그 자식(손자)까지 모두 종료된다.
     @Test func cancellationTerminatesProcessGroup() async throws {
         let pids = try await runAndCancel(script: "sleep 600 & echo $!; echo $$; wait", grace: .seconds(3))

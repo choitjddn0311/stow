@@ -59,18 +59,30 @@ install_python() {
   local stdlib="$py/lib/python$minor"
 
   # yt-dlp 실행에 필요 없는 구성 요소를 뺀다(GUI, 개발 도구, 테스트, pip).
+  # _dbm은 GNU gdbm(GPLv3)을 정적으로 포함하므로 반드시 뺀다(GPL 구성 요소 미포함 규칙).
   find "$py/bin" -mindepth 1 ! -name "python$minor" -delete
   ln -s "python$minor" "$py/bin/python3"
   rm -rf "$py/include" "$py/share" "$py/lib/pkgconfig" \
     "$py"/lib/itcl* "$py"/lib/tcl* "$py"/lib/tk* "$py"/lib/thread* "$py"/lib/libtcl* \
     "$py/lib/libpython$minor.dylib" \
     "$stdlib"/{test,idlelib,tkinter,turtledemo,ensurepip,"config-$minor-darwin"} \
-    "$stdlib"/site-packages/* "$stdlib"/lib-dynload/_tkinter*
+    "$stdlib"/site-packages/* "$stdlib"/lib-dynload/_tkinter* "$stdlib"/lib-dynload/_dbm* "$stdlib"/lib-dynload/_gdbm*
   # 표준 라이브러리를 미리 컴파일한다. 실행 시에는 -B로 번들 안에 .pyc를 쓰지 않으므로(서명 보존)
   # 미리 만들어 두지 않으면 매번 컴파일한다. unchecked-hash는 파일 시각이 바뀌어도 유효하다.
   # -s: .pyc에 기록되는 소스 경로에서 로컬 작업 경로를 뺀다(배포 파일에 사용자 경로가 남지 않게).
   # -B -f: 시작 시 import로 경로가 든 .pyc가 먼저 생기지 않게 하고, 모두 새로 컴파일한다.
   "$py/bin/python3" -I -B -m compileall -q -f -j0 --invalidation-mode unchecked-hash -s "$work" "$stdlib" >/dev/null
+
+  # GPL 라이브러리(GNU gdbm, GNU readline)가 남아 있지 않은지 확인한다.
+  "$py/bin/python3" -I -B -c "
+'''GPL 구성 요소 검사'''
+import importlib.util, readline, sys
+for name in ('_dbm', '_gdbm'):
+    if importlib.util.find_spec(name) is not None:
+        sys.exit(f'{name} 모듈이 남아 있습니다(GNU gdbm, GPL)')
+if 'GNU readline' in readline._READLINE_LIBRARY_VERSION or getattr(readline, 'backend', '') != 'editline':
+    sys.exit('readline이 GNU readline(GPL)에 링크되어 있습니다')
+" || die "Python 런타임에 GPL 구성 요소가 있습니다."
 
   mkdir -p "$BIN_DIR" "$LICENSES_DIR"
   install -m 644 "$stdlib/LICENSE.txt" "$LICENSES_DIR/python-LICENSE.txt"

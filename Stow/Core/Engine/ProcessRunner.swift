@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 /// 실행 중인 프로세스에서 나오는 이벤트. `terminated`는 항상 마지막에 한 번 온다.
 enum ProcessEvent: Sendable, Equatable {
@@ -34,6 +35,8 @@ struct ProcessResult: Sendable, Equatable {
 /// - 인자는 배열로 그대로 전달한다(셸을 거치지 않음).
 /// - 프로세스는 새 프로세스 그룹에서 시작한다. 취소하면 그룹 전체(yt-dlp가 띄운 ffmpeg, deno 포함)에
 ///   SIGTERM을 보내고, `terminationGracePeriod` 뒤에도 남아 있으면 SIGKILL을 보낸다.
+/// - 프로세스가 끝난 뒤에도 출력 파이프를 쥔 프로세스가 남아 있으면 `terminationGracePeriod` 뒤
+///   그룹에 SIGKILL을 보내고 종료를 알린다(종료 이벤트가 한없이 늦어지지 않게).
 /// - stdin은 `/dev/null`이다.
 struct ProcessRunner: Sendable {
     var terminationGracePeriod: Duration = .seconds(3)
@@ -60,20 +63,26 @@ struct ProcessRunner: Sendable {
                 return
             }
 
+            let group = ProcessGroup(pgid: child.pid)
             continuation.onTermination = { reason in
                 if case .cancelled = reason {
-                    Self.terminateGroup(child.pid, grace: grace)
+                    group.terminate(grace: grace)
                 }
             }
 
             let readers = DispatchGroup()
             Self.startReader(fd: child.stdout, group: readers) { continuation.yield(.stdout($0)) }
             Self.startReader(fd: child.stderr, group: readers) { continuation.yield(.stderr($0)) }
+            readers.notify(queue: .global()) { group.markOutputClosed() }
 
             Thread.detachNewThread {
-                let termination = Self.waitForExit(child.pid)
-                // 출력을 모두 전달한 뒤에 종료를 알린다.
-                readers.wait()
+                let termination = group.waitForLeaderExit()
+                // 출력을 모두 전달한 뒤에 종료를 알린다. 파이프를 쥔 프로세스(남은 손자 등)가 있으면
+                // 유예 시간 뒤 그룹을 종료하고, 그래도 닫히지 않으면(그룹 밖 프로세스) 더 기다리지 않는다.
+                if readers.wait(timeout: .now() + grace.dispatchInterval) == .timedOut {
+                    group.signal(SIGKILL)
+                    _ = readers.wait(timeout: .now() + .seconds(1))
+                }
                 switch termination {
                 case .success(let value):
                     continuation.yield(.terminated(value))
@@ -108,26 +117,6 @@ struct ProcessRunner: Sendable {
 
     // MARK: - 내부 구현
 
-    private static func terminateGroup(_ pgid: pid_t, grace: Duration) {
-        kill(-pgid, SIGTERM)
-        let (seconds, attoseconds) = grace.components
-        let nanoseconds = Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000)
-        DispatchQueue.global().asyncAfter(deadline: .now() + .nanoseconds(nanoseconds)) {
-            // 이미 모두 종료했다면 ESRCH로 실패하며 아무 일도 일어나지 않는다.
-            kill(-pgid, SIGKILL)
-        }
-    }
-
-    private static func waitForExit(_ pid: pid_t) -> Result<ProcessTermination, POSIXError> {
-        var status: Int32 = 0
-        while waitpid(pid, &status, 0) == -1 {
-            if errno != EINTR {
-                return .failure(POSIXError(POSIXErrorCode(rawValue: errno) ?? .ECHILD))
-            }
-        }
-        return .success(ProcessTermination(waitStatus: status))
-    }
-
     /// 파이프를 블로킹으로 읽어 줄 단위로 전달한다. EOF에서 fd를 닫는다.
     private static func startReader(
         fd: Int32,
@@ -155,31 +144,106 @@ struct ProcessRunner: Sendable {
     }
 }
 
-/// 바이트를 `\n` 기준으로 나눠 줄을 만든다. 줄 끝의 `\r`은 제거하고, UTF-8이 아닌 바이트는 대체 문자로 바꾼다.
+/// 바이트를 줄로 나눈다. `\n`, `\r`, `\r\n`을 모두 줄 끝으로 본다(`\r`로 같은 줄을 다시 그리는
+/// 진행률 출력 대응). UTF-8이 아닌 바이트는 대체 문자로 바꾼다.
 struct LineSplitter {
     private var pending: [UInt8] = []
+    /// 직전 바이트가 `\r`이었는지. `\r\n`이 청크 경계에서 나뉘어도 한 번의 줄 끝으로 처리한다.
+    private var afterCarriageReturn = false
 
     mutating func append(_ bytes: some Collection<UInt8>) -> [String] {
-        pending.append(contentsOf: bytes)
         var lines: [String] = []
-        var start = pending.startIndex
-        while let newline = pending[start...].firstIndex(of: 0x0A) {
-            lines.append(Self.decode(pending[start..<newline]))
-            start = newline + 1
+        for byte in bytes {
+            switch byte {
+            case 0x0A where afterCarriageReturn:
+                afterCarriageReturn = false
+            case 0x0A:
+                lines.append(takeLine())
+            case 0x0D:
+                lines.append(takeLine())
+                afterCarriageReturn = true
+            default:
+                afterCarriageReturn = false
+                pending.append(byte)
+            }
         }
-        pending.removeSubrange(..<start)
         return lines
     }
 
-    /// 마지막 줄바꿈 뒤에 남은 내용을 돌려준다.
+    /// 마지막 줄 끝 뒤에 남은 내용을 돌려준다.
     mutating func finish() -> String? {
-        defer { pending.removeAll() }
-        return pending.isEmpty ? nil : Self.decode(pending[...])
+        afterCarriageReturn = false
+        return pending.isEmpty ? nil : takeLine()
     }
 
-    private static func decode(_ bytes: ArraySlice<UInt8>) -> String {
-        let trimmed = bytes.last == 0x0D ? bytes.dropLast() : bytes
-        return String(decoding: trimmed, as: UTF8.self)
+    private mutating func takeLine() -> String {
+        defer { pending.removeAll(keepingCapacity: true) }
+        return String(decoding: pending, as: UTF8.self)
+    }
+}
+
+/// 자식 프로세스 그룹. 리더(직접 띄운 자식)를 회수한 뒤에는 pid가 재사용될 수 있으므로,
+/// 리더가 회수되었고 출력 파이프도 모두 닫혔다면 그룹에 시그널을 보내지 않는다.
+/// (그룹에 프로세스가 하나라도 남아 있는 동안에는 pgid가 재사용되지 않는다.)
+private final class ProcessGroup: Sendable {
+    private struct State {
+        var leaderReaped = false
+        var outputClosed = false
+    }
+
+    let pgid: pid_t
+    private let state = OSAllocatedUnfairLock(initialState: State())
+
+    init(pgid: pid_t) {
+        self.pgid = pgid
+    }
+
+    func signal(_ signal: Int32) {
+        state.withLock { state in
+            if !state.leaderReaped || !state.outputClosed {
+                kill(-pgid, signal)
+            }
+        }
+    }
+
+    /// SIGTERM을 보내고, 유예 시간 뒤 SIGKILL을 보낸다.
+    func terminate(grace: Duration) {
+        signal(SIGTERM)
+        DispatchQueue.global().asyncAfter(deadline: .now() + grace.dispatchInterval) { [self] in
+            signal(SIGKILL)
+        }
+    }
+
+    func markOutputClosed() {
+        state.withLock { $0.outputClosed = true }
+    }
+
+    /// 리더가 끝날 때까지 기다렸다가 회수한다. 종료를 먼저 확인(WNOWAIT)하고 잠금 안에서 회수해,
+    /// 회수 직후 재사용된 pid에 시그널을 보내는 경쟁을 막는다.
+    func waitForLeaderExit() -> Result<ProcessTermination, POSIXError> {
+        var info = siginfo_t()
+        while waitid(P_PID, id_t(pgid), &info, WEXITED | WNOWAIT) == -1 {
+            if errno != EINTR { return .failure(Self.currentError()) }
+        }
+        return state.withLock { state in
+            var status: Int32 = 0
+            while waitpid(pgid, &status, 0) == -1 {
+                if errno != EINTR { return .failure(Self.currentError()) }
+            }
+            state.leaderReaped = true
+            return .success(ProcessTermination(waitStatus: status))
+        }
+    }
+
+    private static func currentError() -> POSIXError {
+        POSIXError(POSIXErrorCode(rawValue: errno) ?? .ECHILD)
+    }
+}
+
+private extension Duration {
+    var dispatchInterval: DispatchTimeInterval {
+        let (seconds, attoseconds) = components
+        return .nanoseconds(Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000))
     }
 }
 
