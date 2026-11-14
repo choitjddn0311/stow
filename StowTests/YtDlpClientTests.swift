@@ -65,7 +65,10 @@ struct YtDlpClientOfflineTests {
         let fixture = try TestFixture()
         defer { fixture.cleanUp() }
         let client = YtDlpClient(engine: engine, additionalArguments: ["--enable-file-urls"])
-        let metadata = try await client.fetchMetadata(for: fixture.sourceURL)
+        guard case .video(let metadata) = try await client.fetchMedia(for: fixture.sourceURL) else {
+            Issue.record("영상이 아니라 재생목록으로 해석됨")
+            return
+        }
         #expect(metadata.title == "tone source")
     }
 
@@ -137,7 +140,10 @@ struct YtDlpClientNetworkTests {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let client = YtDlpClient(engine: engine)
 
-        let metadata = try await client.fetchMetadata(for: url)
+        guard case .video(let metadata) = try await client.fetchMedia(for: url) else {
+            Issue.record("영상이 아니라 재생목록으로 해석됨")
+            return
+        }
         let duration = try #require(metadata.duration)
         print("[network test] \(metadata.title) (\(duration)s) → \(outputDirectory.path)")
 
@@ -259,5 +265,22 @@ private enum AudioProbe {
         }
         #expect(total > 0)
         #expect(abs(total - audioFile.length) <= 4096, "decoded \(total) of \(audioFile.length)")
+    }
+}
+
+/// 실제 유튜브 재생목록의 영상 목록을 읽는다(내려받지 않음). 재생목록 URL을 줄 때만 실행한다.
+///   TEST_RUNNER_STOW_NETWORK_TEST_PLAYLIST=<재생목록 URL> xcodebuild ... test
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["STOW_NETWORK_TEST_PLAYLIST"] != nil))
+struct YtDlpClientPlaylistNetworkTests {
+    @Test func readsPlaylistEntries() async throws {
+        let url = try YouTubeURL.parse(try #require(ProcessInfo.processInfo.environment["STOW_NETWORK_TEST_PLAYLIST"]))
+        let client = YtDlpClient(engine: try EngineLocator.bundled())
+        guard case .playlist(let playlist) = try await client.fetchMedia(for: url) else {
+            Issue.record("재생목록으로 해석되지 않음")
+            return
+        }
+        print("[network test] playlist \(playlist.title): \(playlist.entries.count)개, 첫 항목 \(playlist.entries.first?.title ?? "-")")
+        #expect(!playlist.entries.isEmpty)
+        #expect(playlist.entries.allSatisfy { PlaylistEntry.isValidID($0.id) })
     }
 }

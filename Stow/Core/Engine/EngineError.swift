@@ -7,8 +7,10 @@ enum EngineError: Error, Equatable, Sendable {
     case invalidURL
     /// yt-dlp가 지원하지 않는 주소다.
     case unsupportedURL
-    /// 재생목록·채널 주소다(MVP는 단일 영상만 지원).
-    case playlistNotSupported
+    /// 채널 페이지 주소다(영상·재생목록만 지원).
+    case channelNotSupported
+    /// 재생목록에 받을 수 있는 영상이 없다.
+    case emptyPlaylist
     /// 진행 중이거나 예정된 라이브 방송이다.
     case liveNotSupported
 
@@ -58,8 +60,10 @@ extension EngineError: LocalizedError {
             "유튜브 영상 주소가 아닙니다. 주소를 확인해 주세요."
         case .unsupportedURL:
             "지원하지 않는 주소입니다. 유튜브 영상 주소를 입력해 주세요."
-        case .playlistNotSupported:
-            "재생목록이나 채널 주소는 아직 지원하지 않습니다. 영상 하나의 주소를 입력해 주세요."
+        case .channelNotSupported:
+            "채널 주소는 지원하지 않습니다. 영상이나 재생목록 주소를 입력해 주세요."
+        case .emptyPlaylist:
+            "재생목록에 받을 수 있는 영상이 없습니다."
         case .liveNotSupported:
             "진행 중이거나 예정된 라이브 방송은 추출할 수 없습니다."
         case .privateVideo:
