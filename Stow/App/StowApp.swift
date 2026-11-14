@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 @main
@@ -8,8 +9,14 @@ struct StowApp: App {
     @State private var model: ExtractViewModel?
     @State private var engineUpdates: EngineUpdateCoordinator?
     private let engineError: EngineError?
+    /// Sparkle 앱 자동 업데이트(하루 한 번 확인 후 설치 여부를 묻는다. 설정은 Config/Stow-Info.plist).
+    /// 테스트 호스트나 배포 전 실행 확인(release.sh) 때는 시작하지 않는다.
+    private let updaterController: SPUStandardUpdaterController
 
     init() {
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: !Self.updatersDisabled, updaterDelegate: nil, userDriverDelegate: nil
+        )
         let settings = AppSettings()
         _settings = State(initialValue: settings)
         do {
@@ -39,14 +46,16 @@ struct StowApp: App {
             RootView(model: model, settings: settings, engineError: engineError)
                 .onAppear {
                     appDelegate.model = model
-                    // 테스트 호스트로 실행될 때는 네트워크로 엔진을 받지 않는다.
-                    if !Self.isRunningTests { engineUpdates?.start() }
+                    // 테스트 호스트나 배포 전 실행 확인 때는 네트워크로 엔진을 받지 않는다.
+                    if !Self.updatersDisabled { engineUpdates?.start() }
                 }
         }
         .defaultSize(width: 600, height: 540)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .appInfo) {
+                CheckForUpdatesButton(updater: updaterController.updater)
+                Divider()
                 Button("엔진 업데이트 확인…") { engineUpdates?.checkNow() }
                     .disabled(engineUpdates == nil)
                 Button("앱에 들어 있는 엔진으로 되돌리기") { engineUpdates?.revertToBundled() }
@@ -55,8 +64,11 @@ struct StowApp: App {
         }
     }
 
-    private static var isRunningTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    /// 업데이터(Sparkle·엔진 업데이트)를 켜지 않는 실행: 테스트 호스트, 또는 STOW_DISABLE_UPDATERS=1
+    /// (release.sh가 배포 전 앱을 실행해 볼 때 실제 설정·엔진 저장소를 건드리지 않도록).
+    private static var updatersDisabled: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["XCTestConfigurationFilePath"] != nil || environment["STOW_DISABLE_UPDATERS"] == "1"
     }
 }
 

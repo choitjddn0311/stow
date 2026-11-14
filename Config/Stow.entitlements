@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ad-hoc 서명(개발자 계정 없이 배포, 5a) 동안만 필요하다. ad-hoc 서명은 Team ID가 없어 Hardened Runtime의
+	     라이브러리 검증이 앱에 포함된 Sparkle.framework 로드를 거부한다(실행 즉시 종료).
+	     5b에서 Developer ID로 앱과 프레임워크를 같은 Team ID로 서명하면 이 엔타이틀먼트를 뺀다. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

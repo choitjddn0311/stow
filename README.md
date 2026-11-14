@@ -24,7 +24,7 @@
 터미널에 익숙하다면 버전과 관계없이 `xattr -dr com.apple.quarantine /Applications/Stow.app`로도 열 수 있습니다.
 받은 파일이 맞는지는 릴리스에 함께 올린 `.sha256`과 `shasum -a 256 Stow-<버전>.dmg` 결과를 비교해 확인할 수 있습니다.
 
-**네트워크 접속**: 영상 정보 조회·다운로드 외에, 추출 엔진(yt-dlp)을 최신으로 유지하려고 하루에 한 번 GitHub(`api.github.com`, `github.com`, 파일 서버 `*.githubusercontent.com`)에서 yt-dlp 새 버전을 확인하고 받습니다. 이름이나 파일 같은 개인 정보는 보내지 않지만, IP 주소와 접속 시각은 GitHub에 남습니다. 메뉴 "엔진 업데이트 확인…"으로 바로 확인할 수도 있습니다.
+**네트워크 접속**: 영상 정보 조회·다운로드 외에, 앱 새 버전(Sparkle)과 추출 엔진(yt-dlp)을 최신으로 유지하려고 하루에 한 번 GitHub(`api.github.com`, `github.com`, 파일 서버 `*.githubusercontent.com`)에서 새 버전을 확인합니다. 앱 새 버전은 설치 전에 묻고, yt-dlp는 자동으로 받습니다. 이름이나 파일 같은 개인 정보는 보내지 않지만, IP 주소와 접속 시각은 GitHub에 남습니다. 메뉴 "엔진 업데이트 확인…"으로 바로 확인할 수도 있습니다.
 
 ## 이용 안내
 
@@ -43,6 +43,7 @@ Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영�
 | [deno](https://deno.com) | 유튜브 JavaScript 처리 | MIT |
 | [FFmpeg](https://ffmpeg.org) | 오디오 변환 | LGPL 2.1 이상 |
 | [LAME](https://lame.sourceforge.io) | MP3 인코딩 | LGPL |
+| [Sparkle](https://sparkle-project.org) | 앱 자동 업데이트 | MIT (포함된 bsdiff·ed25519 등은 BSD·zlib 계열) |
 
 FFmpeg와 LAME은 GPL 구성 없이 LGPL로 직접 빌드했습니다. 사용한 소스와 빌드 방법은
 [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh)에 있고, 소스는
