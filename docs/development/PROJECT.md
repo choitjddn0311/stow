@@ -69,9 +69,11 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 ### 데이터 흐름
 1. URL을 검증한다(호스트가 youtube.com 또는 youtu.be인지).
 2. `yt-dlp -J`로 메타데이터를 조회한다 → `VideoMetadata`
-3. `yt-dlp -x --audio-format <fmt> --audio-quality <q> --ffmpeg-location <bundle> --newline -o <template>`로 추출한다.
-4. 출력을 한 줄씩 읽어 `ProgressParser`로 진행률을 파싱하고 UI에 반영한다.
-5. 완료되면 알림을 띄우고 Finder에서 보기를 제공한다. 취소하면 자식 프로세스를 종료한다.
+3. 작업마다 만든 임시 폴더에서 `yt-dlp -x --audio-format <fmt> [--audio-quality <q>K] --embed-metadata --ffmpeg-location <bundle> --js-runtimes deno:<bundle> --ignore-config --no-playlist -o "%(id)s.%(ext)s"`로 추출한다(`YtDlpArguments`).
+4. 진행률은 `--progress-template`으로 정한 표식(`[stow:download]`, `[stow:postprocess]`)을 붙여 출력하게 하고 `ProgressParser`로 파싱한다. 최종 경로는 `--print after_move:[stow:file] ...`로 받는다.
+5. 결과 파일을 저장 위치로 옮긴다. 이름은 영상 제목(경로 문자 치환, 200바이트 제한), 같은 이름이 있으면 ` (2)`처럼 번호를 붙이고 덮어쓰지 않는다. 임시 폴더는 성공·실패·취소 모두 지운다.
+   - 임시 폴더를 쓰는 이유: 같은 폴더에서 같은 영상을 다른 포맷으로 추출하면 yt-dlp의 중간 파일 이름이 이전 결과와 겹쳐 변환 후 "원본 삭제" 단계가 이전 결과를 지운다(3단계에서 재현).
+6. 완료되면 알림을 띄우고 Finder에서 보기를 제공한다. 취소하면 자식 프로세스를 종료한다.
 
 ### ViewModel 상태
 대기 → 조회 중 → 준비 → 추출 중 → 완료 / 실패
@@ -89,6 +91,7 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 - **LGPL ffmpeg**: 상용 배포 시 GPL 의무를 피하기 위해서다.
 - **yt-dlp는 zipimport + 번들 Python**: 공식 PyInstaller 단독 실행 파일(`yt-dlp_macos`)은 GPLv3+ 코드를 포함해 결합물 전체가 GPLv3+이다(yt-dlp README). GPL 구성 요소 미포함 규칙을 지키기 위해 Unlicense(+MIT/ISC) 코드만 담긴 zipimport 버전을 번들한 Python으로 실행한다(`python3 -I -B yt-dlp ...`). 번들 크기가 약 40MB 늘어난다.
 - **deno 포함**: yt-dlp는 유튜브 전체 지원에 JS 런타임을 요구하며 deno를 권장한다. 3단계에서 `--js-runtimes deno:<경로>`로 지정한다.
+- **메타데이터 삽입**: `--embed-metadata`로 제목·아티스트·날짜 등을 넣는다(사용자 결정 2026-11-14). 챕터는 MP3만 들어간다(ffmpeg의 FLAC·WAV 출력은 챕터 미지원). 썸네일(앨범 아트) 삽입은 MVP 이후. 챕터 입력용으로 ffmpeg에 `ffmetadata` 디먹서를 켰다.
 - **포함 실행 파일 엔타이틀먼트**: deno는 V8 JIT 때문에 `allow-jit`가 필요하다. Python은 ad-hoc 서명일 때만 `disable-library-validation`을 쓴다(ad-hoc은 Team ID가 없어 확장 모듈 로드가 거부됨). Developer ID 서명에서는 쓰지 않는다(`scripts/entitlements/`).
 - **엔진 원본은 `engine/`**: `Stow/` 아래에 두면 폴더 동기화 그룹이 모든 파일을 `Resources/`에 평탄화해 복사하고, 폴더 단위 예외로도 막히지 않는다. 그래서 동기화 그룹 밖에 두고 빌드 단계(`embed-engine.sh`)에서 복사·서명한다.
 - **실행 파일은 git에 넣지 않음**: 엔진 실행 파일은 `scripts/`로 받거나 빌드해 `engine/`에 둔다(버전 고정, 체크섬 검증). 저장소 용량과 라이선스 관리를 위해서다. CI도 같은 스크립트를 실행한다.
@@ -116,6 +119,6 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 - 앱 자동 업데이트(Sparkle) 도입 여부
 - 수익 모델, 결제
 - 이용 고지 문구, 법률 검토
-- 출력 파일명 규칙(기본값: 영상 제목)
+- 출력 파일명 규칙(기본값: 영상 제목). 3단계 구현: 제목 그대로, 충돌 시 번호 붙임. 사용자 선택(덮어쓰기 등)은 4단계에서 결정
 - 번들 ID(현재 임시값 `com.example.stow`)
 - 오픈소스 고지 표시 방법: 라이선스 원문은 번들 `Resources/bin/licenses/`에 포함. 앱 안 표시 방법(정보 화면 등)과 LGPL 소스 제공 방식은 미정
