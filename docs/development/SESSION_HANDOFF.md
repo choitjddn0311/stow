@@ -6,7 +6,7 @@
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
 - **5a 배포: 0.1.0 공개**(2026-11-14, 사용자 요청): PR #9 병합 후 main(`787895e`)에서 `release.sh --publish`로 초안을 만들고, 올라간 DMG 체크섬을 확인한 뒤 공개. https://github.com/choitjddn0311/stow/releases/tag/v0.1.0 . **다른 계정·기기 설치 테스트는 아직 하지 않음**(사용자가 테스트 전 공개를 선택)
-- **앱 안 엔진 업데이트 구현 중** (MVP 이후 1번, 브랜치 `feat/engine-update`, PR 검증 전)
+- **앱 안 엔진 업데이트 완료**(MVP 이후 1번, PR #11 병합 2026-11-14). **0.2.0**: 버전 0.2.0(빌드 2)과 변경 사항(`docs/release/notes/0.2.0.md`)을 PR #12로 준비. 공개 여부·날짜는 GitHub Releases와 이 문서의 "다음 작업"에서 확인
 - 설계와 로드맵: `PROJECT.md` 참고. MVP 이후 로드맵에 "글로벌 단축키 플로팅 패널" 추가(사용자 요청 2026-11-14, 세부 사항 미정)
 
 ## 로드맵 진행 상황
@@ -19,9 +19,9 @@
 | (UI 다듬기) | **완료** (2026-11-14, PR #7) |
 | 5a. 배포(계정 없이) | **0.1.0 공개** (2026-11-14, PR #9). 다른 기기 설치 테스트 미완 |
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
-| (MVP 이후 1) 앱 안 엔진 업데이트 | 구현 완료, PR 검증 전 |
+| (MVP 이후 1) 앱 안 엔진 업데이트 | **완료** (2026-11-14, PR #11). 0.2.0으로 배포 예정 |
 
-## 앱 안 엔진 업데이트 (2026-11-14, `feat/engine-update`)
+## 앱 안 엔진 업데이트 (2026-11-14, PR #11)
 - 사용자 결정: 자동 확인 + 자동 설치(하루 한 번, 앱 시작 시), stable 채널. 설계는 PROJECT.md 5장 "엔진 업데이트"
 - `Stow/Core/Engine/EngineUpdater.swift`: GitHub 최신 stable 확인, `yt-dlp`·`SHA2-256SUMS` 받기, SHA-256 대조, 번들 Python으로 `--version` 실행해 태그와 비교, 준비 폴더 → `Application Support/<번들 ID>/engine/yt-dlp/<버전>/yt-dlp`로 이동, `current` 기록, 옛 버전 정리. 버전 비교(숫자 단위), 버전 형식 검증(경로 조작 방지)
 - `Stow/Core/Engine/EngineSource.swift`: 지금 쓸 엔진(잠금 보호). `YtDlpClient.engineSource`로 작업마다 시작할 때 읽음. `EngineLocator.replacingYtDlp(with:)`
@@ -159,6 +159,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 
 ## 다음 작업
 - (완료) UI 다듬기: PR #7 병합 / 5a 배포: v0.1.0 공개
-- 5a 남은 확인: 다른 Mac 또는 다른 사용자 계정에서 v0.1.0 DMG 설치(그래도 열기) → 추출까지 확인(사용자). 문제가 나오면 0.1.1로 고친다
+- 0.2.0 배포(사용자 선택 2026-11-14): PR #12 병합 → main에서 `scripts/release.sh --publish` → 초안 확인(체크섬) → 공개. 0.1.0 사용자는 새 DMG로 교체(번들 ID가 같아 설정 유지)
+- 5a 남은 확인: 다른 Mac 또는 다른 사용자 계정에서 최신 DMG 설치(그래도 열기) → 추출까지 확인(사용자). 문제가 나오면 패치 버전으로 고친다
 - 5b 서명·공증(계정 준비 후): Developer ID 서명·공증·stapler, Developer ID 서명에서 Python 확장 모듈 로드 확인
 - MVP 이후: PROJECT.md 2장 목록(엔진 업데이트, Sparkle, 대기열, 결제, 글로벌 단축키 플로팅 패널 등). 글로벌 단축키 패널은 시작 전에 PROJECT.md 8장의 미정 사항을 사용자와 정한다

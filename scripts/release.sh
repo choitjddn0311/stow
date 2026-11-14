@@ -4,23 +4,30 @@
 #   scripts/release.sh            DMG만 만든다(build/release/Stow-<버전>.dmg와 .sha256)
 #   scripts/release.sh --publish  만든 DMG를 GitHub Releases에 "초안(draft)"으로 올린다.
 #                                 공개는 GitHub에서 초안을 확인한 뒤 직접 한다.
+#   scripts/release.sh --notes    빌드·업로드 없이 릴리스 노트만 만들어 보여 준다(미리보기).
+#
+# 릴리스 노트 = 제목 + docs/release/notes/<버전>.md(변경 사항, --publish에 필수) + 설치 안내.
 #
 # 버전은 Xcode 프로젝트의 MARKETING_VERSION을 쓴다. 태그는 v<버전>.
 # 5b(서명·공증)에서는 이 스크립트에 Developer ID 서명·notarytool·stapler 단계를 추가한다.
 source "$(dirname "$0")/lib/common.sh"
 
 PUBLISH=0
+NOTES_ONLY=0
 case "${1:-}" in
   "") ;;
   --publish) PUBLISH=1 ;;
-  *) die "알 수 없는 옵션: $1 (사용법: scripts/release.sh [--publish])" ;;
+  --notes) NOTES_ONLY=1 ;;
+  *) die "알 수 없는 옵션: $1 (사용법: scripts/release.sh [--publish | --notes])" ;;
 esac
 
 OUT="$REPO_ROOT/build/release"
 DERIVED="$OUT/DerivedData"
 cd "$REPO_ROOT"
 
-[[ -z $(git status --porcelain) ]] || die "커밋하지 않은 변경이 있습니다. 배포는 커밋된 상태에서만 만든다."
+if [[ $NOTES_ONLY == 0 ]]; then
+  [[ -z $(git status --porcelain) ]] || die "커밋하지 않은 변경이 있습니다. 배포는 커밋된 상태에서만 만든다."
+fi
 if [[ $PUBLISH == 1 ]]; then
   # 빌드에 몇 분이 걸리므로, 올릴 수 없는 상황이면 먼저 멈춘다.
   gh auth status >/dev/null 2>&1 || die "GitHub CLI에 로그인되어 있지 않습니다(gh auth login)."
@@ -38,9 +45,48 @@ BUNDLE_ID=$(setting PRODUCT_BUNDLE_IDENTIFIER)
 [[ -n $VERSION && -n $BUNDLE_ID ]] || die "MARKETING_VERSION 또는 PRODUCT_BUNDLE_IDENTIFIER를 읽지 못했습니다."
 TAG="v$VERSION"
 DMG="$OUT/Stow-$VERSION.dmg"
+CHANGES="docs/release/notes/${VERSION}.md"
+
+# write_notes FILE SHA256: GitHub 페이지용 릴리스 노트(DMG 안의 INSTALL.txt는 열린 DMG 창 기준이라 따로 쓴다).
+write_notes() {
+  local file=$1 sha=$2
+  {
+    printf '## Stow %s\n\n' "$VERSION"
+    if [[ -f $CHANGES ]]; then
+      cat "$CHANGES"
+      printf '\n'
+    fi
+    cat <<EOF
+macOS 14 이상, Apple Silicon(M1 이후) 전용입니다.
+
+### 설치
+1. 아래 Assets에서 \`Stow-$VERSION.dmg\`를 받아 엽니다.
+2. Stow를 "Applications"(응용 프로그램) 폴더로 끌어다 놓습니다.
+3. 아직 Apple 개발자 서명·공증 전이라 처음 열 때 macOS가 실행을 막습니다.
+   - **macOS 15 이후**: 경고창에서 "완료" → 시스템 설정 → 개인정보 보호 및 보안 → "그래도 열기" → 암호·Touch ID 확인 → 다시 열고 "열기"
+   - **macOS 14**: Finder의 응용 프로그램 폴더에서 Stow를 Control-클릭(또는 우클릭) → "열기" → 경고창에서 "열기"
+   - 터미널: \`xattr -dr com.apple.quarantine /Applications/Stow.app\`
+4. 한 번 열고 나면 이후에는 경고 없이 열립니다.
+
+SHA-256: \`$sha\`
+
+본인이 저작권을 가지고 있거나 사용 허락을 받은 영상에만 사용하세요. 오픈소스 구성 요소와 라이선스는 [README](https://github.com/choitjddn0311/stow#오픈소스-구성-요소)를 참고하세요.
+EOF
+  } > "$file"
+}
+
+if [[ $NOTES_ONLY == 1 ]]; then
+  mkdir -p "$OUT"
+  [[ -f $CHANGES ]] || log "주의: 변경 사항 파일(${CHANGES})이 없습니다. --publish에는 필요합니다."
+  write_notes "$OUT/release-notes.md" "(DMG를 만든 뒤 계산)"
+  log "릴리스 노트 미리보기: $OUT/release-notes.md"
+  cat "$OUT/release-notes.md"
+  exit 0
+fi
 log "Stow $VERSION 배포 파일을 만듭니다 ($(git rev-parse --short HEAD))"
 
 if [[ $PUBLISH == 1 ]]; then
+  [[ -f $CHANGES ]] || die "변경 사항 파일(${CHANGES})이 없습니다. 이 버전의 변경 사항을 적은 뒤 다시 실행하세요."
   # 릴리스가 없어도 태그가 남아 있으면 gh가 그 태그(다른 커밋일 수 있음)에 DMG를 붙이므로 태그도 확인한다.
   remote_tag=$(git ls-remote --tags origin "refs/tags/$TAG") || die "원격 태그를 확인하지 못했습니다(네트워크·인증 확인)."
   if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null || [[ -n $remote_tag ]]; then
@@ -103,25 +149,7 @@ cat "$DMG.sha256" >&2
 # 5. GitHub Releases 초안
 if [[ $PUBLISH == 1 ]]; then
   notes="$OUT/release-notes.md"
-  # GitHub 페이지용 안내(DMG 안의 INSTALL.txt는 열린 DMG 창 기준이라 그대로 쓰지 않는다).
-  cat > "$notes" <<EOF
-## Stow $VERSION
-
-macOS 14 이상, Apple Silicon(M1 이후) 전용입니다.
-
-### 설치
-1. 아래 Assets에서 \`Stow-$VERSION.dmg\`를 받아 엽니다.
-2. Stow를 "Applications"(응용 프로그램) 폴더로 끌어다 놓습니다.
-3. 아직 Apple 개발자 서명·공증 전이라 처음 열 때 macOS가 실행을 막습니다.
-   - **macOS 15 이후**: 경고창에서 "완료" → 시스템 설정 → 개인정보 보호 및 보안 → "그래도 열기" → 암호·Touch ID 확인 → 다시 열고 "열기"
-   - **macOS 14**: Finder의 응용 프로그램 폴더에서 Stow를 Control-클릭(또는 우클릭) → "열기" → 경고창에서 "열기"
-   - 터미널: \`xattr -dr com.apple.quarantine /Applications/Stow.app\`
-4. 한 번 열고 나면 이후에는 경고 없이 열립니다.
-
-SHA-256: \`$(cut -d' ' -f1 "$DMG.sha256")\`
-
-본인이 저작권을 가지고 있거나 사용 허락을 받은 영상에만 사용하세요. 오픈소스 구성 요소와 라이선스는 [README](https://github.com/choitjddn0311/stow#오픈소스-구성-요소)를 참고하세요.
-EOF
+  write_notes "$notes" "$(cut -d' ' -f1 "$DMG.sha256")"
   gh release create "$TAG" "$DMG" "$DMG.sha256" --draft --title "Stow $VERSION" \
     --notes-file "$notes" --target "$(git rev-parse HEAD)"
   log "GitHub Releases에 초안 ${TAG}를 만들었습니다. GitHub에서 확인한 뒤 공개하세요."
