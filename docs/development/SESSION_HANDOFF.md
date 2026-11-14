@@ -43,6 +43,10 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 - macOS 26.6.2(arm64), Xcode 27.2, Swift 6.4.2, git 2.54, Homebrew
 - ffmpeg, yt-dlp는 시스템에 없음(2단계에서 앱 번들용으로 확보)
 
+## CI
+- `.github/workflows/ci.yml`: 러너 `macos-26`, Xcode 26.6으로 고정(로컬은 27.2). Debug 테스트와 Release 빌드를 실행함
+- 로컬과 CI의 Xcode 버전이 다르므로, 최신 SDK 기능은 CI에서 실패할 수 있음. Xcode를 올릴 때는 워크플로의 `XCODE_APP`도 함께 갱신
+
 ## 미해결 문제 / 주의
 - xcodebuild 실행 시 `DVTCoreDeviceCore` 플러그인 로드 실패, `CoreSimulator is out of date` 경고가 나옴. macOS 빌드와 테스트에는 영향 없음. Xcode 구성 요소 불일치로 보이며 `xcodebuild -runFirstLaunch`로 해결될 가능성이 있음(미확인)
 - 번들 ID는 임시값. 5단계 전에 확정 필요

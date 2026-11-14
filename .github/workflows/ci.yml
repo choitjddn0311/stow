@@ -6,29 +6,47 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # PR은 새 푸시가 오면 이전 실행을 취소한다. main 푸시는 커밋마다 끝까지 검증한다.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # 러너 이미지와 Xcode 버전을 고정한다. 올릴 때는 이 두 값과 docs를 함께 갱신한다.
+  XCODE_APP: /Applications/Xcode_26.6.app
 
 jobs:
   build-test:
     name: build-test
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - name: Toolchain
+      - name: Select Xcode
         run: |
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
           swift --version
 
-      - name: Build & Test
+      - name: Test (Debug)
         run: |
-          set -o pipefail
           xcodebuild \
             -project Stow.xcodeproj \
             -scheme Stow \
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath build/DerivedData \
             test
+
+      - name: Build (Release)
+        run: |
+          xcodebuild \
+            -project Stow.xcodeproj \
+            -scheme Stow \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            build
