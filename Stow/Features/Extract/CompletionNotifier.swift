@@ -17,12 +17,17 @@ final class SystemCompletionNotifier: NSObject, CompletionNotifying, UNUserNotif
     private nonisolated static let fileKey = "file"
     private var prepared = false
 
+    /// 앱이 시작할 때 만든다. 처리기를 바로 등록해야, 이전 실행에서 보낸 알림을 눌러 앱이 열렸을 때도
+    /// Finder에서 파일을 보여 줄 수 있다.
+    override init() {
+        super.init()
+        UNUserNotificationCenter.current().delegate = self
+    }
+
     func prepare() {
         guard !prepared else { return }
         prepared = true
-        let center = UNUserNotificationCenter.current()
-        center.delegate = self
-        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     func notifyCompleted(title: String, file: URL) {

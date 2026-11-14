@@ -30,7 +30,6 @@ struct UsageNoticeView: View {
             HStack {
                 Spacer()
                 Button(UsageNotice.quitButton, action: onQuit)
-                    .keyboardShortcut(.cancelAction)
                 Button(UsageNotice.acceptButton, action: onAccept)
                     .keyboardShortcut(.defaultAction)
             }

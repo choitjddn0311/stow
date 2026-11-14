@@ -16,7 +16,6 @@ struct ExtractView: View {
             actionArea
         }
         .padding(24)
-        .frame(minWidth: 560, minHeight: 500)
         .alert(
             "유튜브가 요청을 막았습니다",
             isPresented: Binding(get: { model.retryAlert != nil }, set: { if !$0 { model.retryAlert = nil } }),
@@ -35,7 +34,7 @@ struct ExtractView: View {
         HStack {
             TextField("유튜브 영상 주소를 붙여 넣으세요", text: $model.urlText)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit { model.fetch() }
+                .onSubmit { model.submit() }
                 .disabled(model.isBusy)
             Button("불러오기") { model.fetch() }
                 .disabled(!model.canFetch)
@@ -55,6 +54,9 @@ struct ExtractView: View {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("영상 정보를 불러오는 중…").foregroundStyle(.secondary)
+                Spacer()
+                Button("취소") { model.cancel() }
+                    .keyboardShortcut(.cancelAction)
             }
             .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
         case .failed(let error, nil):
@@ -184,9 +186,7 @@ private struct OptionsSection: View {
                 Text("저장 위치")
                 HStack {
                     Image(systemName: "folder")
-                    Text(settings.outputDirectory.path.replacingOccurrences(
-                        of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"
-                    ))
+                    Text(DisplayPath.abbreviated(settings.outputDirectory))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(settings.outputDirectory.path)
@@ -279,5 +279,16 @@ extension AudioFormat {
         case .wav: "WAV"
         case .flac: "FLAC"
         }
+    }
+}
+
+enum DisplayPath {
+    /// 홈 폴더로 시작하는 경로만 앞부분을 `~`로 줄인다. 예: /Users/me/Music → ~/Music
+    static func abbreviated(_ url: URL, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String {
+        let path = url.standardizedFileURL.path
+        let homePath = home.standardizedFileURL.path
+        if path == homePath { return "~" }
+        let prefix = homePath.hasSuffix("/") ? homePath : homePath + "/"
+        return path.hasPrefix(prefix) ? "~/" + path.dropFirst(prefix.count) : path
     }
 }

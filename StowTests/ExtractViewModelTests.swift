@@ -7,10 +7,16 @@ import Testing
 struct ExtractViewModelTests {
     private let metadata = VideoMetadata(id: "abc123", title: "테스트 곡", duration: 200, uploader: "채널")
     private let validURL = "https://www.youtube.com/watch?v=abc123"
+    /// 추출 전에 저장 폴더가 있는지 확인하므로 실제로 있는 폴더를 쓴다.
+    private static let outputDirectory: URL = {
+        let url = FileManager.default.temporaryDirectory.appending(path: "stow-vm-tests", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
 
     private func makeModel(_ engine: FakeEngine) -> (ExtractViewModel, AppSettings, RecordingNotifier) {
         let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
-        settings.outputDirectory = URL(filePath: "/tmp/stow-out", directoryHint: .isDirectory)
+        settings.outputDirectory = Self.outputDirectory
         let notifier = RecordingNotifier()
         return (ExtractViewModel(settings: settings, engine: engine, notifier: notifier), settings, notifier)
     }
@@ -77,11 +83,11 @@ struct ExtractViewModelTests {
         #expect(model.isBusy)
         await model.waitForTask()
 
-        let expectedFile = URL(filePath: "/tmp/stow-out/테스트 곡.mp3")
+        let expectedFile = Self.outputDirectory.appending(path: "테스트 곡.mp3")
         #expect(model.state == .completed(metadata, expectedFile))
         #expect(engine.extractCalls == [
             .init(url: URL(string: validURL)!, options: ExtractOptions(
-                format: .mp3(.kbps192), outputDirectory: URL(filePath: "/tmp/stow-out", directoryHint: .isDirectory)
+                format: .mp3(.kbps192), outputDirectory: Self.outputDirectory
             ), fileName: "테스트 곡"),
         ])
         #expect(notifier.prepared)
@@ -166,6 +172,79 @@ struct ExtractViewModelTests {
         model.startOver()
         #expect(model.state == .idle)
         #expect(model.urlText.isEmpty)
+    }
+
+    // MARK: - 코드 리뷰 반영
+
+    /// 저장 폴더가 없으면 내려받기 전에 알린다.
+    @Test func missingOutputFolderFailsBeforeExtracting() async {
+        let engine = FakeEngine(metadata: .success(metadata))
+        let (model, settings, _) = await loaded(engine)
+        settings.outputDirectory = URL(filePath: "/nonexistent/stow-\(UUID().uuidString)", directoryHint: .isDirectory)
+        model.extract()
+        #expect(model.state == .failed(.outputDirectoryMissing, metadata))
+        #expect(engine.extractCalls.isEmpty)
+    }
+
+    /// Return: 불러온 주소 그대로면 추출하고, 주소를 바꿨으면 다시 불러온다.
+    @Test func submitExtractsWhenLoadedOtherwiseFetches() async {
+        let engine = FakeEngine(metadata: .success(metadata))
+        let (model, _, _) = makeModel(engine)
+        model.urlText = validURL
+        model.submit()
+        await model.waitForTask()
+        #expect(engine.fetchCount == 1)
+
+        model.submit()
+        await model.waitForTask()
+        #expect(engine.fetchCount == 1)
+        #expect(engine.extractCalls.count == 1)
+    }
+
+    @Test func cancelDuringFetchReturnsToIdle() async {
+        let engine = SlowMetadataEngine()
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        let model = ExtractViewModel(settings: settings, engine: engine, notifier: RecordingNotifier())
+        model.urlText = validURL
+        model.fetch()
+        #expect(model.state == .fetching)
+        model.cancel()
+        await model.waitForTask()
+        #expect(model.state == .idle)
+    }
+
+    /// 앱 종료 시: 취소하고 끝날 때까지 기다린다.
+    @Test func cancelAndWaitStopsExtraction() async {
+        let engine = FakeEngine(metadata: .success(metadata), extractGate: AsyncGate())
+        let (model, _, _) = await loaded(engine)
+        model.extract()
+        #expect(model.isBusy)
+        await model.cancelAndWait()
+        #expect(model.state == .ready(metadata))
+        #expect(!model.isBusy)
+    }
+
+    @Test func displayPathAbbreviatesOnlyHomePrefix() {
+        let home = URL(filePath: "/Users/choi", directoryHint: .isDirectory)
+        #expect(DisplayPath.abbreviated(URL(filePath: "/Users/choi/Music"), home: home) == "~/Music")
+        #expect(DisplayPath.abbreviated(URL(filePath: "/Users/choi"), home: home) == "~")
+        #expect(DisplayPath.abbreviated(URL(filePath: "/Users/choi2/Music"), home: home) == "/Users/choi2/Music")
+        #expect(DisplayPath.abbreviated(URL(filePath: "/Volumes/X/Users/choi/a"), home: home) == "/Volumes/X/Users/choi/a")
+    }
+}
+
+/// 조회가 취소될 때까지 끝나지 않는 엔진.
+final class SlowMetadataEngine: AudioExtracting {
+    func fetchMetadata(for url: URL) async throws -> VideoMetadata {
+        try await Task.sleep(for: .seconds(600))
+        throw EngineError.network
+    }
+
+    func extract(
+        _ url: URL, options: ExtractOptions, fileName: String,
+        progress: @escaping @Sendable (ExtractProgress) -> Void
+    ) async throws -> URL {
+        throw EngineError.network
     }
 }
 
