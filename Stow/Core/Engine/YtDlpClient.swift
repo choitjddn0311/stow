@@ -21,26 +21,31 @@ struct YtDlpClient: Sendable {
         YtDlpArguments(engine: engine, additional: additionalArguments)
     }
 
-    /// 영상 정보를 조회한다(`yt-dlp -J`). 재생목록·라이브 방송이면 오류를 던진다.
-    func fetchMetadata(for url: URL) async throws -> VideoMetadata {
+    /// 주소를 조회한다(`yt-dlp -J --flat-playlist`). 영상이면 정보를, 재생목록이면 영상 목록을 돌려준다.
+    /// 진행 중·예정 라이브 방송, 빈 재생목록이면 오류를 던진다.
+    func fetchMedia(for url: URL) async throws -> FetchedMedia {
         let engine = activeEngine
         let command = engine.ytDlpCommand(arguments(for: engine).metadata(for: url))
         let result = try await runner.run(command.executable, arguments: command.arguments)
         guard result.termination.isSuccess else {
             throw YtDlpErrorMapper.map(stderr: result.stderr)
         }
-        let metadata: VideoMetadata
+        let media: FetchedMedia
         do {
-            metadata = try JSONDecoder().decode(VideoMetadata.self, from: Data(result.stdout.joined(separator: "\n").utf8))
+            media = try JSONDecoder().decode(FetchedMedia.self, from: Data(result.stdout.joined(separator: "\n").utf8))
         } catch let error as EngineError {
             throw error
         } catch {
             throw EngineError.metadataUnreadable
         }
-        if metadata.liveStatus == "is_live" || metadata.liveStatus == "is_upcoming" {
+        switch media {
+        case .video(let metadata) where metadata.liveStatus == "is_live" || metadata.liveStatus == "is_upcoming":
             throw EngineError.liveNotSupported
+        case .playlist(let playlist) where playlist.entries.isEmpty:
+            throw EngineError.emptyPlaylist
+        default:
+            return media
         }
-        return metadata
     }
 
     /// 오디오를 추출해 `options.outputDirectory`에 `<fileName>.<확장자>`로 저장하고 최종 경로를 돌려준다.

@@ -34,17 +34,22 @@ struct YouTubeURLTests {
         #expect(throws: EngineError.invalidURL) { try YouTubeURL.parse(input) }
     }
 
-    /// 재생목록·채널 주소는 yt-dlp를 실행하기 전에 거부한다.
+    /// 재생목록 주소는 받는다(영상을 골라 대기열에 넣는다).
+    @Test func acceptsPlaylistURL() throws {
+        let url = try YouTubeURL.parse("https://www.youtube.com/playlist?list=PL123")
+        #expect(url.path == "/playlist")
+    }
+
+    /// 채널 주소는 yt-dlp를 실행하기 전에 거부한다.
     @Test(arguments: [
-        "https://www.youtube.com/playlist?list=PL123",
         "https://www.youtube.com/@channel",
         "https://www.youtube.com/@channel/videos",
         "https://www.youtube.com/channel/UC123",
         "https://www.youtube.com/c/name",
         "https://www.youtube.com/user/name",
     ])
-    func rejectsPlaylistAndChannelPages(_ input: String) {
-        #expect(throws: EngineError.playlistNotSupported) { try YouTubeURL.parse(input) }
+    func rejectsChannelPages(_ input: String) {
+        #expect(throws: EngineError.channelNotSupported) { try YouTubeURL.parse(input) }
     }
 }
 
@@ -166,10 +171,39 @@ struct VideoMetadataTests {
         #expect(metadata.uploader == "c")
     }
 
-    @Test func rejectsPlaylistJSON() {
-        let json = #"{"id": "PL1", "title": "목록", "_type": "playlist", "entries": []}"#
-        #expect(throws: EngineError.playlistNotSupported) {
-            try JSONDecoder().decode(VideoMetadata.self, from: Data(json.utf8))
+    @Test func decodesVideoAsFetchedMedia() throws {
+        let json = #"{"id": "abc", "title": "영상", "_type": "video"}"#
+        let media = try JSONDecoder().decode(FetchedMedia.self, from: Data(json.utf8))
+        guard case .video(let metadata) = media else { Issue.record("영상으로 해석되지 않음"); return }
+        #expect(metadata.title == "영상")
+    }
+
+    /// `yt-dlp -J --flat-playlist` 형식. 잘못된 항목(ID 없음·이상한 ID)은 빼고 나머지는 살린다.
+    @Test func decodesPlaylistEntries() throws {
+        let json = """
+        {"id": "PL1", "title": "내 목록", "_type": "playlist", "entries": [
+          {"_type": "url", "id": "dQw4w9WgXcQ", "title": "첫 곡", "duration": 212.0, "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+          {"_type": "url", "id": "abc_DEF-123", "title": "[Private video]", "duration": null},
+          {"_type": "url", "title": "ID 없음"},
+          {"_type": "url", "id": "../evil", "title": "이상한 ID"},
+          {"_type": "url", "id": "zzz"}
+        ]}
+        """
+        let media = try JSONDecoder().decode(FetchedMedia.self, from: Data(json.utf8))
+        guard case .playlist(let playlist) = media else { Issue.record("재생목록으로 해석되지 않음"); return }
+        #expect(playlist.title == "내 목록")
+        #expect(playlist.entries.map(\.id) == ["dQw4w9WgXcQ", "abc_DEF-123", "zzz"])
+        #expect(playlist.entries[0].duration == 212)
+        #expect(playlist.entries[0].url == URL(string: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        #expect(playlist.entries[1].isUnavailable)
+        #expect(!playlist.entries[0].isUnavailable)
+        #expect(playlist.entries[2].title == "제목 없음")
+    }
+
+    @Test func rejectsUnknownMediaType() {
+        let json = #"{"id": "x", "_type": "multi_video"}"#
+        #expect(throws: EngineError.unsupportedURL) {
+            try JSONDecoder().decode(FetchedMedia.self, from: Data(json.utf8))
         }
     }
 }

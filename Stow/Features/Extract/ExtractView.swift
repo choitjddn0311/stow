@@ -2,10 +2,17 @@ import AppKit
 import SwiftUI
 
 /// 추출 화면(디자인 A안 "시스템 설정형", Apple HIG 기준).
-/// macOS 시스템 설정처럼 묶음 상자(grouped Form)에 "영상"·"출력"을 두고, 아래 고정 바에서 추출·진행·완료를 다룬다.
+/// 묶음 상자(grouped Form): "영상"(주소·불러온 영상) → "재생목록 영상"(재생목록일 때 고르기) → "출력" → "대기열".
+/// 아래 고정 바: 대기열 요약과 "대기열에 추가".
 struct ExtractView: View {
     @Bindable var model: ExtractViewModel
+    @Bindable var queue: ExtractQueue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(model: ExtractViewModel) {
+        self.model = model
+        queue = model.queue
+    }
 
     var body: some View {
         Form {
@@ -13,8 +20,13 @@ struct ExtractView: View {
                 urlRow
                 statusRow
             }
+            if case .playlist(let playlist) = model.state {
+                PlaylistSection(playlist: playlist, model: model)
+            }
             OutputSection(settings: model.settings)
-                .disabled(model.isBusy)
+            if !queue.items.isEmpty {
+                QueueSection(queue: queue)
+            }
         }
         .formStyle(.grouped)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -24,139 +36,342 @@ struct ExtractView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .frame(minHeight: 60)
+                    .alert(
+                        "유튜브가 요청을 막았습니다",
+                        isPresented: Binding(get: { queue.blockedAlert != nil }, set: { if !$0 { queue.blockedAlert = nil } }),
+                        presenting: queue.blockedAlert
+                    ) { _ in
+                        Button("다시 시도") { queue.resume() }
+                        Button("나중에", role: .cancel) { queue.blockedAlert = nil }
+                    } message: { alert in
+                        Text(alert.message + "\n대기열을 멈췄습니다. 잠시 후 다시 시도해 주세요.")
+                    }
             }
             .background(.bar)
         }
         // 상태 전환은 짧게, "동작 줄이기"를 켜면 애니메이션 없이 바꾼다.
         .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: model.stage)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: queue.items.count)
         .alert(
             "유튜브가 요청을 막았습니다",
             isPresented: Binding(get: { model.retryAlert != nil }, set: { if !$0 { model.retryAlert = nil } }),
             presenting: model.retryAlert
-        ) { alert in
-            Button("다시 시도") { model.retry(alert.action) }
+        ) { _ in
+            Button("다시 시도") { model.retryFetch() }
             Button("닫기", role: .cancel) { model.retryAlert = nil }
         } message: { alert in
             Text(alert.message)
         }
     }
 
-    private var isExtracting: Bool {
-        if case .extracting = model.state { true } else { false }
-    }
-
     // MARK: - 영상 섹션
 
-    /// 주소를 붙여 넣으면 자동으로 불러온다(별도 버튼 없음). Return은 바로 불러오거나, 불러온 뒤에는 추출한다.
-    /// 조회 중에도 주소를 바꿀 수 있고, 추출 중에만 잠근다.
+    /// 주소를 붙여 넣으면 자동으로 불러온다(별도 버튼 없음). Return은 바로 불러오거나, 불러온 뒤에는 대기열에 추가한다.
     private var urlRow: some View {
-        TextField(text: $model.urlText, prompt: Text("유튜브 영상 주소를 붙여 넣으세요")) {
+        TextField(text: $model.urlText, prompt: Text("유튜브 영상·재생목록 주소를 붙여 넣으세요")) {
             Label {
                 Text("주소")
             } icon: {
                 SettingsIcon(symbol: "link", color: .blue)
             }
         }
-        .onSubmit {
-            // 완료 화면에서는 Return이 "Finder에서 보기"(기본 버튼)만 하도록 다시 추출하지 않는다.
-            if case .completed = model.state { return }
-            model.submit()
-        }
+        .onSubmit { model.submit() }
         // 묶음 폼의 텍스트 필드는 기본이 오른쪽 정렬이라 긴 주소의 앞부분이 잘려 보인다.
         .multilineTextAlignment(.leading)
-        .disabled(isExtracting)
     }
 
     @ViewBuilder
     private var statusRow: some View {
         switch model.state {
         case .idle:
-            Label("주소를 붙여 넣으면 영상 정보를 자동으로 불러옵니다.", systemImage: "info.circle")
+            Label("주소를 붙여 넣으면 영상 정보를 자동으로 불러옵니다. 재생목록은 영상을 골라 담을 수 있습니다.", systemImage: "info.circle")
                 .foregroundStyle(.secondary)
         case .fetching:
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("영상 정보를 불러오는 중…").foregroundStyle(.secondary)
+                Text("불러오는 중…").foregroundStyle(.secondary)
                 Spacer()
-                Button("취소") { model.cancel() }
+                Button("취소") { model.cancelFetch() }
                     .keyboardShortcut(.cancelAction)
             }
-        case .failed(let error, nil):
+        case .failed(let error):
             ErrorLabel(error: error)
-        default:
-            if let metadata = model.metadata {
-                VideoRow(metadata: metadata)
+        case .video(let metadata):
+            VideoRow(metadata: metadata)
+        case .playlist(let playlist):
+            PlaylistHeaderRow(playlist: playlist, model: model)
+        }
+    }
+
+    // MARK: - 하단 바
+
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            summary
+            Spacer(minLength: 8)
+            if model.canAddToQueue || model.stage == .video || model.stage == .playlist {
+                Button {
+                    model.addToQueue()
+                } label: {
+                    Label(addTitle, systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!model.canAddToQueue)
             }
         }
     }
 
-    // MARK: - 하단 바: 추출·진행·완료
+    private var addTitle: String {
+        if case .playlist = model.state {
+            "선택한 \(model.pendingAddCount)개 추가"
+        } else {
+            "대기열에 추가"
+        }
+    }
 
     @ViewBuilder
-    private var bottomBar: some View {
-        switch model.state {
-        case .idle, .fetching, .failed(_, nil):
-            HStack {
-                Text("영상을 불러오면 추출할 수 있습니다.")
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-        case .ready:
-            HStack {
-                // 폴더가 사라졌는지는 추출을 누를 때 확인하므로(ExtractViewModel.extract), 여기서는 위치만 알린다.
-                Label("저장 위치: \(model.settings.outputFolderName)", systemImage: "folder")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .help(model.settings.outputDirectory.path)
-                Spacer()
-                extractButton
-            }
-        case .extracting(_, let progress):
-            ExtractProgressView(progress: progress, format: model.settings.format, onCancel: model.cancel)
-        case .completed(_, let file):
+    private var summary: some View {
+        if queue.isPaused, queue.waitingCount > 0 || queue.failedCount > 0 {
             HStack(spacing: 8) {
-                Label {
-                    Text("저장했습니다: \(file.lastPathComponent)")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(file.path)
-                } icon: {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                }
-                Spacer(minLength: 8)
-                Button("다른 영상 추출") { model.startOver() }
-                Button("다시 추출") { model.extract() }
-                    .help("다른 포맷이나 음질로 한 번 더 추출합니다")
-                Button("Finder에서 보기") { model.revealInFinder() }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
+                Label("유튜브가 요청을 막아 대기열을 멈췄습니다.", systemImage: "pause.circle.fill")
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+                Button("재개") { queue.resume() }
             }
-            .controlSize(.large)
-        case .failed(let error, .some):
-            HStack {
-                // 아래 고정 바가 커져 "출력" 섹션을 가리지 않도록 최대 3줄, 전체 문구는 도움말로.
-                ErrorLabel(error: error, lineLimit: 3)
-                Spacer(minLength: 8)
-                extractButton
-            }
+        } else if !queue.items.isEmpty {
+            Text(queueSummary)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        } else {
+            Text("\(model.settings.format.displayName) · \(model.settings.outputFolderName)")
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(model.settings.outputDirectory.path)
         }
     }
 
-    /// 주 동작. 글자 길이에 맞춘 강조 버튼을 오른쪽 끝에 둔다.
-    private var extractButton: some View {
-        Button {
-            model.extract()
-        } label: {
-            Label("\(model.settings.format.displayName)(으)로 추출", systemImage: "arrow.down.circle.fill")
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .keyboardShortcut(.defaultAction)
-        .disabled(!model.canExtract)
+    private var queueSummary: String {
+        var parts: [String] = []
+        if queue.isRunning { parts.append("추출 중 1") }
+        if queue.waitingCount > 0 { parts.append("대기 \(queue.waitingCount)") }
+        if queue.completedCount > 0 { parts.append("완료 \(queue.completedCount)") }
+        if queue.failedCount > 0 { parts.append("실패 \(queue.failedCount)") }
+        return parts.isEmpty ? "대기열이 끝났습니다." : parts.joined(separator: " · ")
     }
 }
 
-// MARK: - 하위 화면
+// MARK: - 재생목록
+
+/// 재생목록 제목·영상 수와 전체 선택.
+private struct PlaylistHeaderRow: View {
+    let playlist: Playlist
+    @Bindable var model: ExtractViewModel
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "list.bullet.rectangle.portrait")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.tint)
+                .frame(width: 112, height: 63)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(playlist.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+                Text("영상 \(playlist.entries.count)개 · \(model.pendingAddCount)개 선택")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Text("저장 위치 아래 \"\(FileNaming.sanitize(playlist.title))\" 폴더에 저장합니다.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            let allSelected = model.pendingAddCount == playlist.entries.count
+            Button(allSelected ? "선택 해제" : "모두 선택") { model.setAllEntriesSelected(!allSelected) }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// 재생목록 영상 고르기(체크박스).
+private struct PlaylistSection: View {
+    let playlist: Playlist
+    @Bindable var model: ExtractViewModel
+
+    var body: some View {
+        Section("재생목록 영상") {
+            ForEach(playlist.entries) { entry in
+                Toggle(isOn: Binding(
+                    get: { model.selectedEntryIDs.contains(entry.id) },
+                    set: { _ in model.toggleEntry(entry.id) }
+                )) {
+                    HStack {
+                        Text(entry.title)
+                            .lineLimit(1)
+                            .foregroundStyle(entry.isUnavailable ? .secondary : .primary)
+                            .help(entry.title)
+                        Spacer(minLength: 8)
+                        if entry.isUnavailable {
+                            Text("볼 수 없음").foregroundStyle(.secondary)
+                        } else if let duration = entry.duration {
+                            Text(DurationFormat.string(from: duration))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+        }
+    }
+}
+
+// MARK: - 대기열
+
+private struct QueueSection: View {
+    @Bindable var queue: ExtractQueue
+
+    var body: some View {
+        Section {
+            ForEach(queue.items) { item in
+                QueueRow(item: item, queue: queue)
+            }
+        } header: {
+            HStack {
+                Text("대기열")
+                Spacer()
+                Button("완료 항목 지우기") { queue.clearFinished() }
+                    .disabled(!queue.hasFinishedItems)
+                Button("모두 취소") { queue.cancelAll() }
+                    .disabled(!queue.hasPendingItems)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+    }
+}
+
+private struct QueueRow: View {
+    let item: ExtractQueue.Item
+    let queue: ExtractQueue
+
+    var body: some View {
+        HStack(spacing: 10) {
+            statusIcon
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .lineLimit(1)
+                    .help(item.title)
+                if case .running(.downloading(let fraction?, _, _)) = item.status {
+                    ProgressView(value: fraction)
+                        .controlSize(.small)
+                } else if case .running = item.status {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .controlSize(.small)
+                }
+                Text(statusText)
+                    .font(.callout)
+                    .foregroundStyle(statusColor)
+                    .monospacedDigit()
+                    .lineLimit(2)
+                    .help(statusText)
+            }
+            Spacer(minLength: 8)
+            actions
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch item.status {
+        case .waiting:
+            Image(systemName: "clock").foregroundStyle(.secondary)
+        case .running:
+            Image(systemName: "arrow.down.circle").foregroundStyle(.tint)
+        case .completed:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+        case .cancelled:
+            Image(systemName: "xmark.circle").foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        HStack(spacing: 4) {
+            switch item.status {
+            case .waiting, .running:
+                iconButton("xmark.circle", label: "취소") { queue.cancel(item.id) }
+            case .completed:
+                iconButton("magnifyingglass", label: "Finder에서 보기") { queue.revealInFinder(item.id) }
+                iconButton("minus.circle", label: "목록에서 지우기") { queue.remove(item.id) }
+            case .failed, .cancelled:
+                iconButton("arrow.clockwise", label: "다시 시도") { queue.retry(item.id) }
+                iconButton("minus.circle", label: "목록에서 지우기") { queue.remove(item.id) }
+            }
+        }
+    }
+
+    private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+        }
+        .buttonStyle(.borderless)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
+    private var statusText: String {
+        let format = item.options.format.displayName
+        switch item.status {
+        case .waiting:
+            return "대기 중 · \(format)"
+        case .running(let progress):
+            return ProgressText.text(for: progress, format: item.options.format)
+        case .completed(let file):
+            return "저장했습니다: \(file.lastPathComponent)"
+        case .failed(let error):
+            return error.errorDescription ?? "오류가 발생했습니다."
+        case .cancelled:
+            return "취소했습니다."
+        }
+    }
+
+    private var statusColor: Color {
+        if case .failed = item.status { .red } else { .secondary }
+    }
+}
+
+enum ProgressText {
+    static func text(for progress: ExtractProgress?, format: AudioFormat) -> String {
+        switch progress {
+        case nil:
+            "준비 중…"
+        case .downloading(let fraction, _, let eta):
+            if let fraction {
+                "다운로드 중 \(Int((fraction * 100).rounded()))%" + (eta.map { " · 약 \($0)초 남음" } ?? "")
+            } else {
+                "다운로드 중…"
+            }
+        case .converting:
+            "\(format.displayName)(으)로 변환 중…"
+        case .embeddingMetadata:
+            "제목·아티스트 정보를 넣는 중…"
+        }
+    }
+}
+
+// MARK: - 공통 하위 화면
 
 /// 시스템 설정의 행 아이콘: 색 사각형 위 흰 SF Symbol.
 private struct SettingsIcon: View {
@@ -222,12 +437,12 @@ private struct VideoRow: View {
     }
 }
 
-/// "출력" 섹션: 포맷 · 음질 · 저장 위치.
+/// "출력" 섹션: 포맷 · 음질 · 저장 위치. 대기열에 넣을 때의 값이 그 항목에 고정된다.
 private struct OutputSection: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
-        Section("출력") {
+        Section {
             Picker(selection: $settings.formatKind) {
                 ForEach(AudioFormatKind.allCases, id: \.self) { kind in
                     Text(kind.displayName).tag(kind)
@@ -272,6 +487,11 @@ private struct OutputSection: View {
                     SettingsIcon(symbol: "folder.fill", color: .cyan)
                 }
             }
+        } header: {
+            Text("출력")
+        } footer: {
+            Text("대기열에 넣는 순간의 포맷·저장 위치로 추출합니다.")
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -294,47 +514,6 @@ private struct OutputSection: View {
         panel.message = "추출한 파일을 저장할 폴더를 선택하세요."
         if panel.runModal() == .OK, let url = panel.url {
             settings.outputDirectory = url
-        }
-    }
-}
-
-private struct ExtractProgressView: View {
-    let progress: ExtractProgress?
-    let format: AudioFormat
-    let onCancel: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                if case .downloading(let fraction?, _, _) = progress {
-                    ProgressView(value: fraction)
-                } else {
-                    ProgressView().progressViewStyle(.linear)
-                }
-                Text(statusText)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Button("취소", action: onCancel)
-                .controlSize(.large)
-                .keyboardShortcut(.cancelAction)
-        }
-    }
-
-    private var statusText: String {
-        switch progress {
-        case nil:
-            "준비 중…"
-        case .downloading(let fraction, _, let eta):
-            if let fraction {
-                "다운로드 중 \(Int((fraction * 100).rounded()))%" + (eta.map { " · 약 \($0)초 남음" } ?? "")
-            } else {
-                "다운로드 중…"
-            }
-        case .converting:
-            "\(format.displayName)(으)로 변환 중…"
-        case .embeddingMetadata:
-            "제목·아티스트 정보를 넣는 중…"
         }
     }
 }

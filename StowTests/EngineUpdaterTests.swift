@@ -145,7 +145,7 @@ struct EngineUpdaterInstallTests {
         source.update(engine.replacingYtDlp(with: missing))
         // 존재하지 않는 yt-dlp를 가리키면 조회가 실패한다 = 바뀐 엔진을 쓰고 있다.
         await #expect(throws: EngineError.self) {
-            try await client.fetchMetadata(for: URL(string: "https://youtu.be/abc")!)
+            try await client.fetchMedia(for: URL(string: "https://youtu.be/abc")!)
         }
     }
 }
