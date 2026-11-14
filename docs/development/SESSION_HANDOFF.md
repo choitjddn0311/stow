@@ -5,7 +5,7 @@
 ## 현재 상태
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
-- **5a 배포 준비 중** (브랜치 `feat/step5a-release`): 번들 ID 적용, `release.sh`·README·설치 안내, 로컬에서 DMG 생성 확인. 남은 것: PR 병합 → GitHub 초안 릴리스 → 다른 계정·기기 설치 테스트(사용자) → 공개
+- **5a 배포: 0.1.0 공개**(2026-11-14, 사용자 요청): PR #9 병합 후 main(`787895e`)에서 `release.sh --publish`로 초안을 만들고, 올라간 DMG 체크섬을 확인한 뒤 공개. https://github.com/choitjddn0311/stow/releases/tag/v0.1.0 . **다른 계정·기기 설치 테스트는 아직 하지 않음**(사용자가 테스트 전 공개를 선택)
 - 설계와 로드맵: `PROJECT.md` 참고. MVP 이후 로드맵에 "글로벌 단축키 플로팅 패널" 추가(사용자 요청 2026-11-14, 세부 사항 미정)
 
 ## 로드맵 진행 상황
@@ -16,10 +16,10 @@
 | 3. 추출 코어 | **완료** (2026-11-14, PR #4) |
 | 4. UI·설정 | **완료** (2026-11-14, PR #6) |
 | (UI 다듬기) | **완료** (2026-11-14, PR #7) |
-| 5a. 배포(계정 없이) | **진행 중** (DMG 생성 확인, 설치 테스트 전) |
+| 5a. 배포(계정 없이) | **0.1.0 공개** (2026-11-14, PR #9). 다른 기기 설치 테스트 미완 |
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
 
-## 5a 배포 (2026-11-14, `feat/step5a-release`)
+## 5a 배포 (2026-11-14, PR #9, v0.1.0)
 - 번들 ID `io.github.choitjddn0311.stow`(테스트 `.tests`) 적용. 개발 중 저장한 설정은 옮겨지지 않음
 - `scripts/release.sh`: 커밋된 상태만 허용 → 엔진 준비 → Release 빌드(`build/release/`) → 검증(서명 `--deep --strict`, arm64, 번들 ID·버전, 앱과 엔진 실행 파일의 Hardened Runtime, yt-dlp·deno 실행, ffmpeg GPL 구성 없음, 앱 안에 로컬 경로 없음) → DMG(앱, Applications 바로가기, "설치 안내.txt", UDZO) → SHA-256. `--publish`는 main이 origin/main과 같을 때만, 같은 태그가 없을 때만 GitHub Releases에 **초안**(태그 `v<MARKETING_VERSION>`)으로 올린다
 - Release 빌드 심볼 제거: 검증 단계가 앱 실행 파일 디버그 맵에 남은 소스·빌드 경로(`/Users/...`)를 잡음 → 앱 대상 Release에 `DEPLOYMENT_POSTPROCESSING`·`STRIP_INSTALLED_PRODUCT`·`STRIP_STYLE = all`
@@ -27,6 +27,8 @@
 - 로컬 결과(0.1.0): DMG 63MB, `hdiutil verify` 통과, DMG 안 앱 서명 검증 통과, `spctl --assess`는 예상대로 rejected(공증 없음)
 - 코드 리뷰(PR #9) 반영 9건: `--publish` 시 gh 로그인·기존 태그(로컬·원격)·릴리스 조회 실패 구분을 빌드 전에 확인, 빌드 설정을 변수로 받아 읽기(pipefail로 메시지 없이 멈추는 문제), 번들 ID를 빌드 설정에서 읽기, codesign 검사 실패 메시지, 경로 노출 검사에 홈 폴더 추가, 설치 안내를 macOS 14(Control-클릭 → 열기)와 15 이후(그래도 열기)로 구분, 릴리스 노트를 GitHub용 문구로, pbxproj 정렬. 반영 후 DMG 재생성 확인, `--publish`는 main이 아니면 아무것도 올리지 않고 멈춤 확인
 - 아직 확인하지 않은 것: 인터넷에서 받은(격리 표시가 붙은) 상태로 "그래도 열기" 후 앱이 열리고, 앱 안 엔진(python·deno·ffmpeg)이 추가 경고 없이 실행되는지 → 다른 계정·기기 설치 테스트에서 확인
+- 0.1.0 릴리스: DMG 65,811,856바이트, SHA-256 `1694db9fd9b739eea46e582ba68cf0ddb1aa124c307d520182ab8a470f46e05f`, 태그 `v0.1.0` → `787895e`. 업로드한 DMG를 다시 받아 체크섬·로컬 파일과 일치 확인
+- 릴리스 중 발견한 버그: `release.sh`의 `"$TAG를"`처럼 변수 바로 뒤에 한글이 오면 bash가 한글까지 변수 이름으로 읽어 `set -u`에 걸림(0.1.0에서는 초안 생성 후 마지막 안내 메시지에서 실패, 릴리스에는 영향 없음. 같은 버그가 "태그가 이미 있음" 확인 메시지에도 있어, 그 경우 안내 대신 변수 오류로 멈췄다) → `${TAG}`로 수정. 재발 방지: CI "Lint scripts" 단계가 변수 바로 뒤 비ASCII 문자를 검사, `scripts/lib/common.sh` 머리말에 규칙 기록. 코드 리뷰(PR #10) 반영: `git ls-remote` 실패를 "태그 없음"으로 넘기지 않음, yt-dlp 검사도 찾은 Python 실행 파일 경로 사용
 
 ## UI 다듬기 (2026-11-14, PR #7)
 - 시안 캔버스(Artifact, 비공개): https://claude.ai/artifact/8hdHa6wfW8TngvMrB9DAq2 — A 시스템 설정형, B 중앙 카드형, C 툴바 통합형, 공통 이용 고지. 디자인 시스템은 쓰지 않고 Apple HIG 기준(사용자 선택)
@@ -142,7 +144,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - 그 밖의 미정 사항은 `PROJECT.md` 8장 참고
 
 ## 다음 작업
-- (완료) UI 다듬기: PR #7 병합
-- 5a 배포(계정 없이, 사용자 결정 2026-11-14): 번들 ID 적용 → Release 빌드·DMG·`release.sh`·GitHub Releases 업로드 → 설치 안내("그래도 열기") → 다른 기기·계정에서 설치 테스트
+- (완료) UI 다듬기: PR #7 병합 / 5a 배포: v0.1.0 공개
+- 5a 남은 확인: 다른 Mac 또는 다른 사용자 계정에서 v0.1.0 DMG 설치(그래도 열기) → 추출까지 확인(사용자). 문제가 나오면 0.1.1로 고친다
 - 5b 서명·공증(계정 준비 후): Developer ID 서명·공증·stapler, Developer ID 서명에서 Python 확장 모듈 로드 확인
 - MVP 이후: PROJECT.md 2장 목록(엔진 업데이트, Sparkle, 대기열, 결제, 글로벌 단축키 플로팅 패널 등). 글로벌 단축키 패널은 시작 전에 PROJECT.md 8장의 미정 사항을 사용자와 정한다
