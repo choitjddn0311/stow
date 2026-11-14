@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # PR은 새 푸시가 오면 이전 실행을 취소한다. main 푸시는 커밋마다 끝까지 검증한다.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # 러너 이미지와 Xcode 버전을 고정한다. 올릴 때는 이 두 값과 docs를 함께 갱신한다.
+  XCODE_APP: /Applications/Xcode_26.6.app
+
+jobs:
+  build-test:
+    name: build-test
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::error::$XCODE_APP 이 러너 이미지에 없습니다. 사용 가능한 Xcode:"
+            ls -d /Applications/Xcode*.app
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          swift --version
+
+      - name: Test (Debug)
+        run: |
+          xcodebuild \
+            -project Stow.xcodeproj \
+            -scheme Stow \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            test
+
+      - name: Build (Release)
+        run: |
+          xcodebuild \
+            -project Stow.xcodeproj \
+            -scheme Stow \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            build
+
+      - name: Verify Release binary
+        run: |
+          APP=build/DerivedData/Build/Products/Release/Stow.app
+          ARCHS=$(lipo -archs "$APP/Contents/MacOS/Stow")
+          echo "archs: $ARCHS"
+          [ "$ARCHS" = "arm64" ] || { echo "::error::arm64 전용이 아님: $ARCHS"; exit 1; }
+          FLAGS=$(codesign -dv "$APP" 2>&1 | grep flags=)
+          echo "$FLAGS"
+          echo "$FLAGS" | grep -q runtime || { echo "::error::Hardened Runtime 미적용"; exit 1; }
+          if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q app-sandbox; then
+            echo "::error::샌드박스 엔타이틀먼트가 포함됨"; exit 1
+          fi
+          echo "LSMinimumSystemVersion: $(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")"
