@@ -70,7 +70,11 @@ struct ExtractView: View {
                 SettingsIcon(symbol: "link", color: .blue)
             }
         }
-        .onSubmit { model.submit() }
+        .onSubmit {
+            // 완료 화면에서는 Return이 "Finder에서 보기"(기본 버튼)만 하도록 다시 추출하지 않는다.
+            if case .completed = model.state { return }
+            model.submit()
+        }
         .disabled(isExtracting)
     }
 
@@ -107,7 +111,6 @@ struct ExtractView: View {
                 Text("영상을 불러오면 추출할 수 있습니다.")
                     .foregroundStyle(.secondary)
                 Spacer()
-                extractButton
             }
         case .ready:
             HStack {

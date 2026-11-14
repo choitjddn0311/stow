@@ -30,11 +30,12 @@ struct UsageNoticeView: View {
             Text(UsageNotice.title)
                 .font(.title3.weight(.semibold))
                 .accessibilityAddTraits(.isHeader)
-            Text(UsageNotice.paragraphs[0])
-                .fixedSize(horizontal: false, vertical: true)
-            Text(UsageNotice.paragraphs[1])
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // 문단 수가 바뀌어도 모두 보이도록 반복한다(첫 문단은 본문, 나머지는 보조 문구).
+            ForEach(Array(UsageNotice.paragraphs.enumerated()), id: \.offset) { index, paragraph in
+                Text(paragraph)
+                    .foregroundStyle(index == 0 ? .primary : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(spacing: 8) {
                 Button(action: onAccept) {
                     Text(UsageNotice.acceptButton).frame(maxWidth: .infinity)
