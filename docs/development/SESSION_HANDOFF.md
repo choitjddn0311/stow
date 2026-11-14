@@ -3,7 +3,7 @@
 **마지막 업데이트**: 2026-11-14
 
 ## 현재 상태
-- **[이어서 할 일, 2026-11-14 중단]** MVP 이후 3번 "여러 URL 대기열·재생목록 추출" 구현 중(브랜치 `feat/queue-playlist`, 커밋 `b15fb11`, PR 아직 없음). 사용자 결정: 한 번에 하나씩 추출, 재생목록은 목록을 보여 주고 고르기(비공개·삭제 영상 기본 제외), 재생목록 이름 하위 폴더에 저장, 포맷·저장 위치는 대기열에 넣을 때 고정. 구현 완료·로컬 Debug `test` 99개 통과·런타임 이슈 0건. 남은 일: ① PROJECT.md(MVP 이후 3번 결정·데이터 흐름)와 이 문서의 상세 기록 ② 실제 재생목록 URL로 네트워크 테스트(`TEST_RUNNER_STOW_NETWORK_TEST_PLAYLIST=<URL>`, 사용자에게 URL 요청) ③ 사용자 화면 점검(재생목록 고르기, 대기열 진행·취소·다시 시도·차단 시 일시 정지) ④ PR → CI → /code-review → 승인 후 병합. Sparkle(PR #14)은 병합됐지만 **배포하지 않음**(사용자 지시) — 0.3.0은 대기열까지 넣은 뒤 배포 예정
+- **대기열·재생목록 구현 완료, PR 검증 중**(MVP 이후 3번, 브랜치 `feat/queue-playlist`). Sparkle(PR #14)은 병합됐지만 **배포하지 않음**(사용자 지시) — 0.3.0은 이 기능까지 넣은 뒤 배포 예정
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
 - **5a 배포: 0.1.0 공개**(2026-11-14, 사용자 요청): PR #9 병합 후 main(`787895e`)에서 `release.sh --publish`로 초안을 만들고, 올라간 DMG 체크섬을 확인한 뒤 공개. https://github.com/choitjddn0311/stow/releases/tag/v0.1.0 . **다른 계정·기기 설치 테스트는 아직 하지 않음**(사용자가 테스트 전 공개를 선택)
@@ -22,7 +22,16 @@
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
 | (MVP 이후 1) 앱 안 엔진 업데이트 | **완료** (2026-11-14, PR #11). v0.2.0으로 공개 |
 | (MVP 이후 2) 앱 자동 업데이트(Sparkle) | **완료** (2026-11-14, PR #14), 미배포 |
-| (MVP 이후 3) 대기열·재생목록 | 구현 중 (`feat/queue-playlist`, PR 전) |
+| (MVP 이후 3) 대기열·재생목록 | 구현 완료, PR 검증 중 |
+
+## 대기열·재생목록 (2026-11-14, `feat/queue-playlist`)
+- 사용자 결정: 한 번에 하나씩 추출, 재생목록은 목록을 보여 주고 고르기(비공개·삭제 영상 기본 제외), 재생목록 이름 하위 폴더(순번 없음), 포맷·저장 위치는 대기열에 넣을 때 고정. 설계는 PROJECT.md 5장
+- `Stow/Core/Models/Playlist.swift`: `Playlist`·`PlaylistEntry`(ID 형식 검사, 주소는 ID로 생성), `FetchedMedia`(`_type`으로 영상/재생목록 구분, 잘못된 항목은 빼고 살림)
+- `YtDlpClient.fetchMedia`(`AudioExtracting` 변경), 빈 재생목록 `.emptyPlaylist`, 채널은 `.channelNotSupported`(재생목록 주소는 허용)
+- `Stow/Features/Queue/ExtractQueue.swift`: 순차 실행, 항목별 취소·제거·다시 시도, 완료 항목 지우기·모두 취소, 차단 시 일시 정지·`resume`, 하위 폴더 생성, 저장 위치 없으면 실패, 진행률은 보이는 값이 바뀔 때만, 대기열이 끝나면 알림 한 번, 앱 종료 시 진행 항목만 취소(`cancelAndWait`)
+- `ExtractViewModel`: 주소 입력·불러오기·재생목록 선택·대기열에 추가만(추출 상태는 대기열로). 화면: "재생목록 영상"·"대기열" 섹션, 아래 바에 대기열 요약·"대기열에 추가"/"선택한 N개 추가"
+- 테스트: `ExtractQueueTests`(10개), `ExtractViewModelTests` 재작성, 재생목록 해석, 네트워크 재생목록 테스트(`TEST_RUNNER_STOW_NETWORK_TEST_PLAYLIST=<URL>` 지정 시). 로컬 Debug `test` 99개 통과, 런타임 이슈 0건
+- 아직 확인하지 않은 것: 실제 재생목록 URL 조회(사용자 URL 필요), 사용자 화면 점검
 
 ## 앱 자동 업데이트 Sparkle (2026-11-14, `feat/sparkle`)
 - 사용자 결정: 도입, 하루 한 번 확인 후 설치 여부를 묻는다(Sparkle 기본 창), appcast는 최신 릴리스 파일(`releases/latest/download/appcast.xml`). 설계는 PROJECT.md 5장
