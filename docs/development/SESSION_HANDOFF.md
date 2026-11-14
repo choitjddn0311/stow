@@ -20,6 +20,16 @@
 | 5a. 배포(계정 없이) | **0.1.0 공개** (2026-11-14, PR #9). 다른 기기 설치 테스트 미완 |
 | 5b. 서명·공증 | 미착수(Apple Developer 계정 준비 후) |
 | (MVP 이후 1) 앱 안 엔진 업데이트 | **완료** (2026-11-14, PR #11). v0.2.0으로 공개 |
+| (MVP 이후 2) 앱 자동 업데이트(Sparkle) | 구현 완료, PR 검증 전 (0.3.0으로 배포 예정) |
+
+## 앱 자동 업데이트 Sparkle (2026-11-14, `feat/sparkle`)
+- 사용자 결정: 도입, 하루 한 번 확인 후 설치 여부를 묻는다(Sparkle 기본 창), appcast는 최신 릴리스 파일(`releases/latest/download/appcast.xml`). 설계는 PROJECT.md 5장
+- Sparkle 2.10.1(Swift Package, `Package.resolved` 고정, MIT·BSD·zlib), 메뉴 "업데이트 확인…", `Config/Stow-Info.plist`(SUFeedURL·SUPublicEDKey·자동 확인), 테스트 호스트에서는 시작 안 함
+- **EdDSA 서명키**: 2026-11-14 이 Mac의 로그인 키체인에 생성(계정 `io.github.choitjddn0311.stow`), 공개키 `fWCstUEQ1NVBOQvE4GJPWcnjxorWPKAGqZBRMVfEN0w=`. 개인키 백업은 사용자가 해야 함(잃으면 기존 사용자에게 업데이트 불가)
+- 발견·해결: ad-hoc 서명 + Hardened Runtime에서 라이브러리 검증이 Sparkle.framework 로드를 거부해 **Release 앱이 실행 즉시 종료**(Debug는 Hardened Runtime이 꺼져 있어 테스트·CI로 안 잡힘) → `Config/Stow.entitlements`에 `disable-library-validation`(5b에서 제거), `release.sh`에 앱 실제 실행 확인(5초) 추가
+- `release.sh`: Sparkle.framework·SUPublicEDKey 확인, 키체인 공개키와 앱 공개키 일치 확인, DMG EdDSA 서명·검증, appcast.xml 생성(변경 사항을 간단한 HTML로)·xmllint·서명·검증, 릴리스에 appcast.xml 함께 업로드. 서명키가 없으면 `--publish` 거부
+- 로컬: Debug `test` 92개 통과, 런타임 이슈 0건. `release.sh`(올리지 않음)로 Release 빌드 → 실행 확인 → DMG → Sparkle 서명·appcast 생성·검증 통과
+- 아직 확인하지 않은 것: 실제 업데이트(옛 버전 앱이 새 버전을 찾아 받아 설치). 피드가 공개되어야 가능 → 0.3.0 공개 후 버전을 낮춘 로컬 빌드로 확인
 
 ## 앱 안 엔진 업데이트 (2026-11-14, PR #11)
 - 사용자 결정: 자동 확인 + 자동 설치(하루 한 번, 앱 시작 시), stable 채널. 설계는 PROJECT.md 5장 "엔진 업데이트"
@@ -161,5 +171,5 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - (완료) UI 다듬기: PR #7 병합 / 5a 배포: v0.1.0 공개
 - (완료) v0.2.0 공개(2026-11-14): DMG 65840114바이트, SHA-256 `0e5c32ea94b0303f7f0468f07fbd4fe76697f3f2e00458db79a91dedb1027ed2`. 초안을 다시 받아 체크섬·로컬 파일 일치, DMG 안 앱 0.2.0·번들 yt-dlp 2026.10.26·서명 검증 확인 후 공개. 0.1.0 사용자는 새 DMG로 교체(번들 ID가 같아 설정 유지)
 - 5a 남은 확인: 다른 Mac 또는 다른 사용자 계정에서 최신 DMG 설치(그래도 열기) → 추출까지 확인(사용자). 문제가 나오면 패치 버전으로 고친다
-- 5b 서명·공증(계정 준비 후): Developer ID 서명·공증·stapler, Developer ID 서명에서 Python 확장 모듈 로드 확인
+- 5b 서명·공증(계정 준비 후): Developer ID 서명·공증·stapler, Developer ID 서명에서 Python 확장 모듈 로드 확인, 앱 `disable-library-validation` 제거(Sparkle)
 - MVP 이후: PROJECT.md 2장 목록(엔진 업데이트, Sparkle, 대기열, 결제, 글로벌 단축키 플로팅 패널 등). 글로벌 단축키 패널은 시작 전에 PROJECT.md 8장의 미정 사항을 사용자와 정한다
