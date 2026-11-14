@@ -3,7 +3,7 @@
 **마지막 업데이트**: 2026-11-14
 
 ## 현재 상태
-- 로드맵 **3단계(추출 코어) 구현 완료, PR 검증 중** (브랜치 `feat/extract-core`). 병합 전까지는 "완료"로 표시하지 않는다.
+- 로드맵 **3단계(추출 코어) 완료**: PR #4로 병합(2026-11-14). 다음은 4단계 UI·설정.
 - 2단계(엔진 번들링) 완료: PR #3으로 병합(2026-11-14).
 - 설계와 로드맵: `PROJECT.md` 참고
 
@@ -12,7 +12,7 @@
 |---|---|
 | 1. 기반 구축 | **완료** (2026-11-14, PR #1) |
 | 2. 엔진 번들링 | **완료** (2026-11-14, PR #3) |
-| 3. 추출 코어 | **구현 완료, PR 병합 대기** |
+| 3. 추출 코어 | **완료** (2026-11-14, PR #4) |
 | 4. UI·설정 | 미착수 ← 다음 |
 | 5. 배포 | 미착수 |
 
@@ -56,7 +56,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - 네트워크 테스트(사용자 제공 URL `https://www.youtube.com/watch?v=B5cvbwOmfY0`, "Heya" 325초): 통과(33초)
   - MP3 320,076bps, WAV pcm_s16le, FLAC — 모두 48kHz 스테레오, 길이 325.0초, 제목·아티스트·날짜 태그 있음, Core Audio로 끝까지 디코딩됨
   - yt-dlp가 번들 deno로 유튜브 JS 챌린지 처리 확인(`-v`: `Solving JS challenges using deno`), 경고 없음
-  - 사람이 직접 듣는 확인은 사용자에게 요청(결과 파일은 세션 임시 폴더에 있었음)
+  - 사용자가 결과 파일(MP3)을 직접 들어 정상 재생 확인(2026-11-14)
   - 코드 리뷰 반영 후 재실행: 첫 시도는 추출 단계에서 유튜브 HTTP 403으로 실패(`.blockedByYouTube`로 분류됨, 짧은 시간에 같은 영상을 반복 요청한 영향으로 추정), 바로 다시 실행해 통과
 
 ## 확인된 개발 환경
@@ -79,7 +79,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - 번들 ID는 임시값, 5단계 전에 Apple Developer 계정 필요
 - 그 밖의 미정 사항은 `PROJECT.md` 8장 참고
 
-## 다음 작업: 4단계 UI·설정 (3단계 PR 병합 후)
+## 다음 작업: 4단계 UI·설정
 - ExtractView/ViewModel(상태: 대기 → 조회 중 → 준비 → 추출 중 → 완료/실패), 포맷·품질 선택, 저장 위치, 설정 기억(`UserDefaults`), 진행률, 취소, 완료 알림, Finder에서 보기, 파일명 충돌 처리 방식 결정, 오류 문구 표시(`EngineError.errorDescription`), 첫 실행 이용 고지
 - ViewModel 테스트용 가짜 엔진이 필요하다 → `YtDlpClient`를 프로토콜로 추상화
 - 완료 조건: PROJECT.md 7장 4단계 수동 시나리오 전체 통과
