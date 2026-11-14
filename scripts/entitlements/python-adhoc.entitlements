@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ad-hoc 서명(로컬 개발)에서만 사용한다. ad-hoc 서명은 Team ID가 없어 Hardened Runtime의
+	     라이브러리 검증이 Python 확장 모듈(.so) 로드를 거부한다. Developer ID 서명에서는 같은 Team ID로
+	     검증을 통과하므로 이 엔타이틀먼트를 쓰지 않는다. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

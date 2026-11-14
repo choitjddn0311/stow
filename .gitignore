@@ -17,4 +17,4 @@ build/
 01_CONTEXT_GUIDE.md
 
 # 앱 번들용 실행 파일 (scripts/로 받거나 빌드, 저장소에 포함하지 않음)
-Stow/Resources/bin/
+/engine/
