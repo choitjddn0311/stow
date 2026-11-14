@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 @main
@@ -8,8 +9,14 @@ struct StowApp: App {
     @State private var model: ExtractViewModel?
     @State private var engineUpdates: EngineUpdateCoordinator?
     private let engineError: EngineError?
+    /// Sparkle 앱 자동 업데이트(하루 한 번 확인 후 설치 여부를 묻는다. 설정은 Config/Stow-Info.plist).
+    /// 테스트 호스트로 실행될 때는 시작하지 않는다.
+    private let updaterController: SPUStandardUpdaterController
 
     init() {
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: !Self.isRunningTests, updaterDelegate: nil, userDriverDelegate: nil
+        )
         let settings = AppSettings()
         _settings = State(initialValue: settings)
         do {
@@ -47,6 +54,8 @@ struct StowApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .appInfo) {
+                Button("업데이트 확인…") { updaterController.checkForUpdates(nil) }
+                Divider()
                 Button("엔진 업데이트 확인…") { engineUpdates?.checkNow() }
                     .disabled(engineUpdates == nil)
                 Button("앱에 들어 있는 엔진으로 되돌리기") { engineUpdates?.revertToBundled() }

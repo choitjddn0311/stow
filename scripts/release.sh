@@ -41,11 +41,51 @@ settings=$(xcodebuild -project Stow.xcodeproj -target Stow -configuration Releas
   || die "빌드 설정을 읽지 못했습니다."
 setting() { awk -F' = ' -v key="$1" '$1 ~ "^ *"key"$" {print $2}' <<<"$settings" | head -n 1; }
 VERSION=$(setting MARKETING_VERSION)
+BUILD_NUMBER=$(setting CURRENT_PROJECT_VERSION)
+MIN_MACOS=$(setting MACOSX_DEPLOYMENT_TARGET)
 BUNDLE_ID=$(setting PRODUCT_BUNDLE_IDENTIFIER)
-[[ -n $VERSION && -n $BUNDLE_ID ]] || die "MARKETING_VERSION 또는 PRODUCT_BUNDLE_IDENTIFIER를 읽지 못했습니다."
+[[ -n $VERSION && -n $BUILD_NUMBER && -n $MIN_MACOS && -n $BUNDLE_ID ]] \
+  || die "버전·빌드 번호·최소 macOS·번들 ID를 빌드 설정에서 읽지 못했습니다."
 TAG="v$VERSION"
 DMG="$OUT/Stow-$VERSION.dmg"
 CHANGES="docs/release/notes/${VERSION}.md"
+REPO_URL="https://github.com/choitjddn0311/stow"
+# Sparkle 업데이트 서명키(EdDSA)의 키체인 계정. 공개키는 Config/Stow-Info.plist의 SUPublicEDKey.
+SPARKLE_ACCOUNT="$BUNDLE_ID"
+
+# write_appcast FILE ED_SIGNATURE LENGTH: Sparkle 업데이트 목록(이 버전 한 항목). 앱은
+# releases/latest/download/appcast.xml을 읽으므로 최신 릴리스에 함께 올린다.
+write_appcast() {
+  local file=$1 signature=$2 length=$3 pub_date notes_html
+  pub_date=$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")
+  # 변경 사항(마크다운의 제목·목록·굵게·코드만)을 Sparkle 업데이트 창에 보일 간단한 HTML로 바꾼다.
+  notes_html=$(perl -CSD -ne '
+    chomp; next if /^\s*$/;
+    s/&/&amp;/g; s/</&lt;/g; s/>/&gt;/g;
+    s/\*\*(.+?)\*\*/<b>$1<\/b>/g; s/`([^`]+)`/<code>$1<\/code>/g;
+    if (/^- (.*)/) { print "<ul>" unless $in; $in = 1; print "<li>$1</li>"; next }
+    if ($in) { print "</ul>"; $in = 0 }
+    if (/^#+ (.*)/) { print "<h3>$1</h3>" } else { print "<p>$_</p>" }
+    END { print "</ul>" if $in }' "$CHANGES" 2>/dev/null || true)
+  cat > "$file" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Stow</title>
+    <link>${REPO_URL}/releases</link>
+    <item>
+      <title>Stow ${VERSION}</title>
+      <pubDate>${pub_date}</pubDate>
+      <sparkle:version>${BUILD_NUMBER}</sparkle:version>
+      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>${MIN_MACOS}</sparkle:minimumSystemVersion>
+      <description><![CDATA[${notes_html}]]></description>
+      <enclosure url="${REPO_URL}/releases/download/${TAG}/Stow-${VERSION}.dmg" length="${length}" type="application/octet-stream" sparkle:edSignature="${signature}"/>
+    </item>
+  </channel>
+</rss>
+EOF
+}
 
 # write_notes FILE SHA256: GitHub 페이지용 릴리스 노트(DMG 안의 INSTALL.txt는 열린 DMG 창 기준이라 따로 쓴다).
 write_notes() {
@@ -79,7 +119,8 @@ if [[ $NOTES_ONLY == 1 ]]; then
   mkdir -p "$OUT"
   [[ -f $CHANGES ]] || log "주의: 변경 사항 파일(${CHANGES})이 없습니다. --publish에는 필요합니다."
   write_notes "$OUT/release-notes.md" "(DMG를 만든 뒤 계산)"
-  log "릴리스 노트 미리보기: $OUT/release-notes.md"
+  write_appcast "$OUT/appcast-preview.xml" "(DMG 서명 후 계산)" 0
+  log "릴리스 노트 미리보기: $OUT/release-notes.md, Sparkle 업데이트 목록 미리보기: $OUT/appcast-preview.xml"
   cat "$OUT/release-notes.md"
   exit 0
 fi
@@ -131,6 +172,17 @@ if grep -qE -- '--enable-(gpl|nonfree|version3)' <<<"$conf"; then die "ffmpeg �
 # 배포 파일에 저장소 경로나 홈 폴더 경로(사용자 이름)가 남지 않았는지 확인한다.
 leaked=$(grep -rlaiF -e "$REPO_ROOT" -e "$HOME/" "$APP" || true)
 [[ -z $leaked ]] || die "앱에 로컬 경로가 남아 있습니다:$(printf '\n%s' "$leaked" | head -4)"
+[[ -d $APP/Contents/Frameworks/Sparkle.framework ]] || die "앱에 Sparkle.framework가 없습니다."
+[[ $(plutil -extract SUPublicEDKey raw "$APP/Contents/Info.plist" 2>/dev/null) != "" ]] || die "Info.plist에 SUPublicEDKey가 없습니다."
+# 앱을 실제로 실행해 시작 직후 종료되지 않는지 본다. 프레임워크 로드·서명 문제(예: 라이브러리 검증)는
+# 실행해야 드러난다. 실행하면 창이 잠깐 떴다가 닫힌다.
+log "앱 실행 확인(5초)"
+"$APP/Contents/MacOS/Stow" >"$OUT/launch.log" 2>&1 &
+launch_pid=$!
+sleep 5
+kill -0 "$launch_pid" 2>/dev/null || die "앱이 실행 직후 종료되었습니다: $OUT/launch.log"
+kill "$launch_pid"
+wait "$launch_pid" 2>/dev/null || true
 
 # 4. DMG: 앱, 응용 프로그램 폴더 바로가기, 설치 안내
 log "DMG 만들기"
@@ -146,11 +198,31 @@ hdiutil verify "$DMG" >/dev/null || die "DMG 검증 실패"
 log "완료: $DMG ($(du -h "$DMG" | cut -f1))"
 cat "$DMG.sha256" >&2
 
-# 5. GitHub Releases 초안
+# 5. Sparkle: DMG에 EdDSA 서명 → appcast.xml 생성·서명 → 둘 다 검증
+SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
+APPCAST="$OUT/appcast.xml"
+if "$SPARKLE_BIN/generate_keys" --account "$SPARKLE_ACCOUNT" -p >/dev/null 2>&1; then
+  log "Sparkle 서명"
+  [[ $("$SPARKLE_BIN/generate_keys" --account "$SPARKLE_ACCOUNT" -p) == $(plutil -extract SUPublicEDKey raw "$APP/Contents/Info.plist") ]] \
+    || die "키체인의 Sparkle 공개키가 앱의 SUPublicEDKey와 다릅니다."
+  signature=$("$SPARKLE_BIN/sign_update" --account "$SPARKLE_ACCOUNT" -p "$DMG") || die "DMG Sparkle 서명 실패"
+  "$SPARKLE_BIN/sign_update" --account "$SPARKLE_ACCOUNT" --verify "$DMG" "$signature" >/dev/null || die "DMG Sparkle 서명 검증 실패"
+  write_appcast "$APPCAST" "$signature" "$(stat -f %z "$DMG")"
+  xmllint --noout "$APPCAST" || die "appcast.xml 형식 오류"
+  "$SPARKLE_BIN/sign_update" --account "$SPARKLE_ACCOUNT" "$APPCAST" >/dev/null || die "appcast.xml 서명 실패"
+  "$SPARKLE_BIN/sign_update" --account "$SPARKLE_ACCOUNT" --verify "$APPCAST" >/dev/null || die "appcast.xml 서명 검증 실패"
+  log "Sparkle 업데이트 목록: $APPCAST"
+elif [[ $PUBLISH == 1 ]]; then
+  die "키체인에 Sparkle 서명키(계정 ${SPARKLE_ACCOUNT})가 없습니다. 업데이트를 받을 수 없게 되므로 올리지 않습니다."
+else
+  log "주의: Sparkle 서명키가 없어 appcast.xml을 만들지 않았습니다(--publish에는 필요)."
+fi
+
+# 6. GitHub Releases 초안
 if [[ $PUBLISH == 1 ]]; then
   notes="$OUT/release-notes.md"
   write_notes "$notes" "$(cut -d' ' -f1 "$DMG.sha256")"
-  gh release create "$TAG" "$DMG" "$DMG.sha256" --draft --title "Stow $VERSION" \
+  gh release create "$TAG" "$DMG" "$DMG.sha256" "$APPCAST" --draft --title "Stow $VERSION" \
     --notes-file "$notes" --target "$(git rev-parse HEAD)"
   log "GitHub Releases에 초안 ${TAG}를 만들었습니다. GitHub에서 확인한 뒤 공개하세요."
 fi
