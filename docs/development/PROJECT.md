@@ -48,7 +48,7 @@
 | 변환 | ffmpeg/ffprobe **LGPL 구성으로 직접 빌드**(arm64, MP3·WAV·FLAC에 필요한 기능만, libmp3lame 포함) |
 | 설정 저장 | `UserDefaults` |
 | 서버/DB/인증 | 없음(모든 처리 로컬) |
-| 배포 | Developer ID 서명 → notarytool 공증 → DMG → GitHub Releases. Mac App Store에는 배포하지 않음 |
+| 배포 | GitHub Releases에 DMG로 배포. Mac App Store에는 배포하지 않음. **1차(5a)**: 개발자 계정 없이 ad-hoc 서명(사용자가 처음 실행할 때 "그래도 열기" 필요). **정식(5b)**: 계정 준비 후 Developer ID 서명 → notarytool 공증 → stapler (2026-11-14 변경) |
 | 샌드박스 | 끔. Hardened Runtime은 켬 |
 
 ## 4. 아키텍처
@@ -88,6 +88,7 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 - **yt-dlp 사용**: 유튜브가 바뀌어도 커뮤니티가 가장 빨리 고친다. Swift 자체 파서는 자주 고장 나서 배제했다.
 - **엔진 업데이트**: MVP에서는 앱 릴리스 때 함께 갱신한다. MVP 직후 앱 안에서 업데이트하는 기능을 추가한다.
 - **직접 배포**: 유튜브 다운로드 앱은 App Store 심사(가이드라인 5.2.3)에서 거절될 위험이 높다.
+- **서명은 나중에(2026-11-14 사용자 결정)**: Developer ID 서명과 공증은 App Store와 별개로 유료 Apple Developer Program(연 $99)이 필요하다. 먼저 계정 없이 ad-hoc 서명 DMG로 배포하고(5a), 정식 배포 때 계정을 만들어 같은 배포 스크립트에 서명·공증 단계를 추가한다(5b). 서명·공증이 없으면 macOS가 처음 실행을 막고, macOS 15부터는 우클릭 → 열기로도 넘어갈 수 없어 시스템 설정 → 개인정보 보호 및 보안에서 "그래도 열기"를 눌러야 한다. 이 절차는 README·배포 안내에 적는다.
 - **샌드박스 끔**: 포함한 실행 파일을 띄우고 임의 폴더에 저장하기 쉽게 하기 위해서다.
 - **Hardened Runtime**: 프로젝트 설정은 YES. 단, Xcode가 Debug 빌드(`ENABLE_DEBUG_DYLIB=YES`)에서는 자동으로 끄므로, 런타임 플래그 확인은 Release 빌드로 한다.
 - **LGPL ffmpeg**: 상용 배포 시 GPL 의무를 피하기 위해서다.
@@ -112,7 +113,8 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 | 2. 엔진 번들링 | 포함한 엔진을 안전하게 실행 | yt-dlp 확보 스크립트(체크섬), ffmpeg LGPL 빌드 스크립트, `EngineLocator`, `ProcessRunner`(비동기, 줄 단위 출력, 취소) | 1 | 앱에서 `yt-dlp --version`과 `ffmpeg -version` 실행, 취소 후 남은 프로세스 없음, ffmpeg 구성에 GPL 없음 | ProcessRunner 단위 테스트, `ffmpeg -buildconf` 확인 |
 | 3. 추출 코어 | UI 없이 추출 | `YtDlpClient`(메타데이터, 추출), 인자 생성, `ProgressParser`, `EngineError` 매핑 | 2 | 실제 영상으로 MP3 320, WAV, FLAC 생성·재생 확인 | 단위 테스트(픽스처), 네트워크 통합 테스트는 분리 |
 | 4. UI·설정 | MVP 기능 완성 | ExtractView/ViewModel, 포맷·품질 선택, 저장 위치, 설정 기억, 진행률, 취소, 알림, Finder에서 보기, 충돌 처리, 오류 문구, 이용 고지 | 3 | 수동 시나리오 체크리스트 전체 통과 | 가짜 엔진으로 ViewModel 테스트, 수동 테스트 |
-| 5. 배포 | 다른 Mac에서 설치·실행 | 포함한 실행 파일까지 서명, 공증, stapler, DMG, `release.sh` | 4, Apple Developer 계정 | `spctl --assess` 통과, 깨끗한 계정에서 설치해 추출 성공 | 다른 계정이나 기기에서 설치 테스트 |
+| 5a. 배포(계정 없이) | 다른 Mac에서 설치·실행 | Release 빌드, DMG, `release.sh`, GitHub Releases 업로드, 설치 안내("그래도 열기") | 4, 번들 ID 확정 | 깨끗한 계정에서 안내대로 설치해 추출 성공 | 다른 계정이나 기기에서 설치 테스트 |
+| 5b. 서명·공증 | 경고 없이 실행 | 포함한 실행 파일까지 Developer ID 서명, 공증, stapler를 `release.sh`에 추가 | 5a, Apple Developer 계정 | `spctl --assess` 통과, 경고 없이 설치·추출 성공 | 다른 계정이나 기기에서 설치 테스트 |
 
 **4단계 수동 시나리오**: 정상 추출(3개 포맷), 잘못된 URL, 비공개·연령 제한 영상, 네트워크 끊김, 추출 중 취소, 파일명 충돌, 앱 재시작 후 설정 유지.
 
@@ -122,6 +124,7 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 - 수익 모델, 결제
 - 이용 고지 문구의 법률 검토(MVP는 초안 사용)
 - 출력 파일명 규칙: 영상 제목, 충돌 시 번호 붙임(2026-11-14 확정). 다른 규칙(채널명 포함 등) 선택 기능은 MVP 이후
-- 번들 ID(현재 임시값 `com.example.stow`)
+- 번들 ID(현재 임시값 `com.example.stow`). 5a 전에 확정한다(나중에 바꾸면 사용자 설정(UserDefaults)이 새 ID로 옮겨지지 않는다)
+- Apple Developer 계정을 만드는 시점(5b)
 - 오픈소스 고지 표시 방법: 라이선스 원문은 번들 `Resources/bin/licenses/`에 포함. 앱 안 표시 방법(정보 화면 등)과 LGPL 소스 제공 방식은 미정
 - 글로벌 단축키 플로팅 패널(MVP 이후 5번): 단축키 기본값과 사용자 변경 기능, 클립보드 주소 자동 입력 여부, 패널 크기·위치·항상 위 여부, 추출 중에 패널을 닫으면 어떻게 할지, 구현 방식(전역 단축키 등록 API 또는 외부 라이브러리 — 쓸 경우 GPL이 아닌 라이선스만, CLAUDE.md 규칙)
