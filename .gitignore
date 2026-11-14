@@ -1,0 +1,17 @@
+# Agent skills (외부 설치, 저장소에 포함하지 않음)
+.agents/
+.claude/skills/
+skills-lock.json
+
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+
+# 개인 작업 가이드 (프로젝트 외부 문서, 저장소에 포함하지 않음)
+00_NEW_PROJECT_GUIDE.md
+01_CONTEXT_GUIDE.md
