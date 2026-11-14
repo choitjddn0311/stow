@@ -1,9 +1,8 @@
 name: CI
 
+# PR에서만 실행한다. 브랜치 보호가 main 최신 상태를 요구하므로 PR 검증 결과 = 병합 결과.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
 
 permissions:
@@ -11,8 +10,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # PR은 새 푸시가 오면 이전 실행을 취소한다. main 푸시는 커밋마다 끝까지 검증한다.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   # 러너 이미지와 Xcode 버전을 고정한다. 올릴 때는 이 두 값과 docs를 함께 갱신한다.
