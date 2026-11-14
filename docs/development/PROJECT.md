@@ -40,7 +40,9 @@
 | 테스트 | Swift Testing (`@Test`, `#expect`), 앱 호스트 테스트 대상 `StowTests` |
 | 번들 ID | `com.example.stow` **(임시, 5단계 전 확정 필요)** |
 | 서명(개발) | 로컬 실행용 ad-hoc 서명(`-`), 팀 미지정 |
-| 추출 엔진 | yt-dlp 단독 실행 파일(macOS용), 앱 번들에 포함, `Process`로 실행 |
+| 추출 엔진 | yt-dlp **zipimport 버전**(Unlicense) + 번들한 Python 런타임(python-build-standalone, CPython 3.13)으로 실행. 공식 macOS 단독 실행 파일은 GPLv3+ 코드를 포함해 쓰지 않음(2026-11-14 변경) |
+| JS 런타임 | deno(MIT), 앱 번들에 포함. yt-dlp의 유튜브 전체 지원(yt-dlp-ejs)에 필요(2026-11-14 추가) |
+| 프로세스 실행 | `posix_spawn`으로 새 프로세스 그룹에서 실행(`ProcessRunner`). 취소 시 그룹 전체 종료 |
 | 변환 | ffmpeg/ffprobe **LGPL 구성으로 직접 빌드**(arm64, MP3·WAV·FLAC에 필요한 기능만, libmp3lame 포함) |
 | 설정 저장 | `UserDefaults` |
 | 서버/DB/인증 | 없음(모든 처리 로컬) |
@@ -57,10 +59,11 @@ Stow/
 ├── Features/Extract/    # ExtractView, ExtractViewModel
 ├── Core/Engine/         # EngineLocator, ProcessRunner, YtDlpClient, ProgressParser, EngineError
 ├── Core/Models/         # VideoMetadata, ExtractOptions 등
-├── Core/Settings/       # AppSettings (UserDefaults)
-└── Resources/bin/       # yt-dlp, ffmpeg, ffprobe (서명 대상, git 미포함·스크립트로 생성)
+└── Core/Settings/       # AppSettings (UserDefaults)
 StowTests/
-scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, release.sh
+engine/                  # 엔진 원본: python/, yt-dlp, deno, ffmpeg, ffprobe, licenses/ (git 미포함·스크립트로 생성)
+                         # 빌드 시 앱 번들 Contents/Resources/bin/으로 복사·서명
+scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, entitlements/, release.sh
 ```
 
 ### 데이터 흐름
@@ -84,13 +87,17 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, release.sh
 - **샌드박스 끔**: 포함한 실행 파일을 띄우고 임의 폴더에 저장하기 쉽게 하기 위해서다.
 - **Hardened Runtime**: 프로젝트 설정은 YES. 단, Xcode가 Debug 빌드(`ENABLE_DEBUG_DYLIB=YES`)에서는 자동으로 끄므로, 런타임 플래그 확인은 Release 빌드로 한다.
 - **LGPL ffmpeg**: 상용 배포 시 GPL 의무를 피하기 위해서다.
-- **실행 파일은 git에 넣지 않음**: yt-dlp·ffmpeg 바이너리는 `scripts/`로 받거나 빌드해 `Stow/Resources/bin/`에 둔다(버전 고정, 체크섬 검증). 저장소 용량과 라이선스 관리를 위해서다. CI도 같은 스크립트를 실행한다.
+- **yt-dlp는 zipimport + 번들 Python**: 공식 PyInstaller 단독 실행 파일(`yt-dlp_macos`)은 GPLv3+ 코드를 포함해 결합물 전체가 GPLv3+이다(yt-dlp README). GPL 구성 요소 미포함 규칙을 지키기 위해 Unlicense(+MIT/ISC) 코드만 담긴 zipimport 버전을 번들한 Python으로 실행한다(`python3 -I -B yt-dlp ...`). 번들 크기가 약 40MB 늘어난다.
+- **deno 포함**: yt-dlp는 유튜브 전체 지원에 JS 런타임을 요구하며 deno를 권장한다. 3단계에서 `--js-runtimes deno:<경로>`로 지정한다.
+- **포함 실행 파일 엔타이틀먼트**: deno는 V8 JIT 때문에 `allow-jit`가 필요하다. Python은 ad-hoc 서명일 때만 `disable-library-validation`을 쓴다(ad-hoc은 Team ID가 없어 확장 모듈 로드가 거부됨). Developer ID 서명에서는 쓰지 않는다(`scripts/entitlements/`).
+- **엔진 원본은 `engine/`**: `Stow/` 아래에 두면 폴더 동기화 그룹이 모든 파일을 `Resources/`에 평탄화해 복사하고, 폴더 단위 예외로도 막히지 않는다. 그래서 동기화 그룹 밖에 두고 빌드 단계(`embed-engine.sh`)에서 복사·서명한다.
+- **실행 파일은 git에 넣지 않음**: 엔진 실행 파일은 `scripts/`로 받거나 빌드해 `engine/`에 둔다(버전 고정, 체크섬 검증). 저장소 용량과 라이선스 관리를 위해서다. CI도 같은 스크립트를 실행한다.
 - **보안**: 프로세스 인자는 배열로 전달한다. 포함한 실행 파일도 Hardened Runtime으로 서명한다.
 
 ## 6. 리스크
 - **법적 리스크**: 유튜브 약관은 공식 기능이 아닌 다운로드를 금지한다. 상용화 전에 법률 검토가 필요하다(사용자 담당).
 - **엔진 고장**: 유튜브 측 변경으로 yt-dlp가 고장 날 수 있다. 엔진 업데이트 기능으로 대응한다.
-- **실행 지연**: yt-dlp 단일 파일 버전은 시작이 1~2초 늦다. 문제가 되면 압축을 풀어 둔 폴더 버전으로 바꾼다.
+- **실행 지연**: 번들 Python으로 yt-dlp를 시작하는 데 약 0.7초 걸린다(2단계 측정, `--version`). 표준 라이브러리는 미리 컴파일해 둔다.
 
 ## 7. 개발 로드맵
 
@@ -111,3 +118,4 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, release.sh
 - 이용 고지 문구, 법률 검토
 - 출력 파일명 규칙(기본값: 영상 제목)
 - 번들 ID(현재 임시값 `com.example.stow`)
+- 오픈소스 고지 표시 방법: 라이선스 원문은 번들 `Resources/bin/licenses/`에 포함. 앱 안 표시 방법(정보 화면 등)과 LGPL 소스 제공 방식은 미정
