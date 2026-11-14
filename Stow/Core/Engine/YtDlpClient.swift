@@ -9,14 +9,22 @@ struct YtDlpClient: Sendable {
     var additionalArguments: [String] = []
     /// 작업 폴더를 만들 위치. nil이면 저장 위치와 같은 볼륨의 시스템 임시 폴더를 쓴다(테스트에서 지정).
     var workDirectoryRoot: URL?
+    /// 지금 쓸 엔진(앱 안 엔진 업데이트로 yt-dlp가 바뀜). nil이면 `engine`을 쓴다.
+    var engineSource: EngineSource?
 
-    private var arguments: YtDlpArguments {
+    /// 작업마다 시작할 때 한 번 읽는다. 진행 중인 작업은 업데이트가 끝나도 이 엔진으로 끝까지 돈다.
+    private var activeEngine: EngineLocator {
+        engineSource?.current ?? engine
+    }
+
+    private func arguments(for engine: EngineLocator) -> YtDlpArguments {
         YtDlpArguments(engine: engine, additional: additionalArguments)
     }
 
     /// 영상 정보를 조회한다(`yt-dlp -J`). 재생목록·라이브 방송이면 오류를 던진다.
     func fetchMetadata(for url: URL) async throws -> VideoMetadata {
-        let command = engine.ytDlpCommand(arguments.metadata(for: url))
+        let engine = activeEngine
+        let command = engine.ytDlpCommand(arguments(for: engine).metadata(for: url))
         let result = try await runner.run(command.executable, arguments: command.arguments)
         guard result.termination.isSuccess else {
             throw YtDlpErrorMapper.map(stderr: result.stderr)
@@ -50,8 +58,9 @@ struct YtDlpClient: Sendable {
         let workDirectory = try makeWorkDirectory(near: options.outputDirectory)
         defer { try? FileManager.default.removeItem(at: workDirectory) }
 
+        let engine = activeEngine
         let command = engine.ytDlpCommand(
-            arguments.extract(url, format: options.format, workDirectory: workDirectory)
+            arguments(for: engine).extract(url, format: options.format, workDirectory: workDirectory)
         )
         let state = ExtractState()
         let termination = try await runner.run(command.executable, arguments: command.arguments) { event in

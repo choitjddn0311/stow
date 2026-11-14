@@ -33,6 +33,19 @@ struct EngineLocator: Sendable, Equatable {
         }
     }
 
+    private init(python: URL, ytDlp: URL, ffmpeg: URL, ffprobe: URL, deno: URL) {
+        self.python = python
+        self.ytDlp = ytDlp
+        self.ffmpeg = ffmpeg
+        self.ffprobe = ffprobe
+        self.deno = deno
+    }
+
+    /// yt-dlp만 다른 파일(앱 안에서 업데이트한 버전)로 바꾼 엔진. 나머지는 번들 것을 쓴다.
+    func replacingYtDlp(with url: URL) -> EngineLocator {
+        EngineLocator(python: python, ytDlp: url, ffmpeg: ffmpeg, ffprobe: ffprobe, deno: deno)
+    }
+
     /// 앱 번들(`Contents/Resources/bin`)에 포함된 엔진.
     static func bundled(in bundle: Bundle = .main) throws(EngineError) -> EngineLocator {
         guard let resources = bundle.resourceURL else { throw .missingComponent("bin") }
