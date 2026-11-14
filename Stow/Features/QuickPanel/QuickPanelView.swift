@@ -66,7 +66,6 @@ struct QuickPanelView: View {
         .frame(width: Self.width, height: Self.height)
         .modifier(PanelBackground())
         .onChange(of: model.presentationID, initial: true) { isFieldFocused = true }
-        .onChange(of: extract.stage) { model.stageDidChange() }
     }
 
     private var addButtonTitle: String {
@@ -101,7 +100,7 @@ private struct ContentRow: View {
                 .foregroundStyle(.secondary)
         case .video(let metadata):
             HStack(spacing: 12) {
-                Thumbnail(url: metadata.thumbnailURL)
+                VideoThumbnail(url: metadata.thumbnailURL, width: 64, cornerRadius: 4)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(metadata.title)
                         .font(.headline)
@@ -150,23 +149,6 @@ private struct ContentRow: View {
         let total = playlist.entries.count
         let base = available == total ? "영상 \(total)개" : "영상 \(total)개 중 받을 수 있는 \(available)개"
         return playlist.isTruncated ? base + " (처음 \(Playlist.maxEntries)개까지)" : base
-    }
-}
-
-private struct Thumbnail: View {
-    let url: URL?
-
-    var body: some View {
-        AsyncImage(url: url) { phase in
-            if case .success(let image) = phase {
-                image.resizable().aspectRatio(contentMode: .fill)
-            } else {
-                Rectangle().fill(.quaternary)
-            }
-        }
-        .frame(width: 64, height: 36)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .accessibilityHidden(true)
     }
 }
 

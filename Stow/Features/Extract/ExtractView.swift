@@ -399,26 +399,7 @@ private struct VideoRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            AsyncImage(url: metadata.thumbnailURL) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .overlay {
-                            Image(systemName: "play.rectangle")
-                                .font(.system(size: 20, weight: .light))
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 112, height: 63)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor))
-            }
-            .accessibilityHidden(true)
+            VideoThumbnail(url: metadata.thumbnailURL, width: 112, cornerRadius: 6)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(metadata.title)
@@ -439,6 +420,34 @@ private struct VideoRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// 영상 썸네일(16:9). 불러오지 못하면 자리표시를 보여 준다. 메인 창과 빠른 추출 패널이 같이 쓴다.
+struct VideoThumbnail: View {
+    let url: URL?
+    let width: CGFloat
+    var cornerRadius: CGFloat = 6
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        AsyncImage(url: url) { phase in
+            if case .success(let image) = phase {
+                image.resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(.quaternary)
+                    .overlay {
+                        Image(systemName: "play.rectangle")
+                            .font(.system(size: width * 0.18, weight: .light))
+                            .foregroundStyle(.secondary)
+                    }
+            }
+        }
+        .frame(width: width, height: (width * 9 / 16).rounded())
+        .clipShape(shape)
+        .overlay { shape.strokeBorder(Color(nsColor: .separatorColor)) }
+        .accessibilityHidden(true)
     }
 }
 

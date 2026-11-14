@@ -4,7 +4,6 @@ import SwiftUI
 /// 메뉴 막대 아이콘의 메뉴. 창을 닫아도 앱이 여기 남아 빠른 추출 단축키가 동작한다(사용자 결정 2026-11-14).
 struct MenuBarMenu: View {
     let coordinator: AppCoordinator
-    @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
@@ -14,10 +13,7 @@ struct MenuBarMenu: View {
         }
         Button("빠른 추출…") { coordinator.showQuickPanel() }
             .globalKeyboardShortcut(.quickExtract)
-        Button("Stow 창 열기") {
-            NSApp.activate()
-            openWindow(id: AppCoordinator.mainWindowID)
-        }
+        Button("Stow 창 열기") { coordinator.openMainWindow() }
         Divider()
         Button("설정…") {
             NSApp.activate()

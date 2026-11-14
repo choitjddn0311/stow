@@ -17,11 +17,12 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
-    func toggle() {
-        isVisible ? model.dismiss() : show()
-    }
-
+    /// 패널을 연다. 이미 열려 있으면 입력을 지우지 않고 초점만 준다.
     func show() {
+        if let panel, panel.isVisible {
+            panel.makeKey()
+            return
+        }
         let panel = panel ?? makePanel()
         self.panel = panel
         position(panel)

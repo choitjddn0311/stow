@@ -20,6 +20,7 @@ struct StowApp: App {
         let settings = AppSettings()
         _settings = State(initialValue: settings)
         let coordinator: AppCoordinator
+        let engineUpdates: EngineUpdateCoordinator?
         do {
             let bundled = try EngineLocator.bundled()
             // 앱 안에서 yt-dlp를 업데이트하면 source가 바뀌고, 다음 추출부터 새 엔진을 쓴다.
@@ -38,30 +39,31 @@ struct StowApp: App {
                 mainModel: ExtractViewModel(settings: settings, engine: client, queue: queue),
                 panelModel: panelModel
             )
-            _engineUpdates = State(initialValue: EngineUpdateCoordinator(
+            engineUpdates = EngineUpdateCoordinator(
                 updater: EngineUpdater(storage: EngineUpdater.defaultStorage(), python: bundled.python),
                 source: source,
                 bundled: bundled
-            ))
+            )
             engineError = nil
         } catch {
             coordinator = AppCoordinator(settings: settings, mainModel: nil, panelModel: nil)
-            _engineUpdates = State(initialValue: nil)
+            engineUpdates = nil
             engineError = error
         }
         if !Self.isTestHost { coordinator.registerGlobalShortcut() }
         _coordinator = State(initialValue: coordinator)
+        _engineUpdates = State(initialValue: engineUpdates)
+        // 창은 시작할 때 열리지 않을 수도 있으므로(닫은 채 종료하면 복원되지 않음), 종료 처리와 엔진 업데이트는
+        // 창이 아니라 앱 시작에 연결한다.
+        AppDelegate.queue = coordinator.queue
+        let startUpdaters = !Self.updatersDisabled
+        AppDelegate.onLaunch = { if startUpdaters { engineUpdates?.start() } }
     }
 
     var body: some Scene {
         // 창은 하나뿐이다(메뉴 막대·패널에서 "창 열기"가 새 창을 만들지 않고 이 창을 연다).
         Window("Stow", id: AppCoordinator.mainWindowID) {
             RootView(model: coordinator.mainModel, settings: settings, engineError: engineError)
-                .onAppear {
-                    appDelegate.queue = coordinator.queue
-                    // 테스트 호스트나 배포 전 실행 확인 때는 네트워크로 엔진을 받지 않는다.
-                    if !Self.updatersDisabled { engineUpdates?.start() }
-                }
                 .modifier(OpenMainWindowBinder(coordinator: coordinator))
         }
         .defaultSize(width: 600, height: 540)
@@ -121,10 +123,18 @@ private struct OpenMainWindowBinder: ViewModifier {
 /// 엔진은 별도 프로세스 그룹에서 돌기 때문에 앱만 끝나면 남는다.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var queue: ExtractQueue?
+    /// 종료할 때 진행 중인 추출을 정리할 대기열(앱 시작 전에 `StowApp`이 넣는다)
+    static var queue: ExtractQueue?
+    /// 앱이 시작되면 한 번 부른다(엔진 업데이트 시작). 테스트 호스트·배포 전 확인 때는 업데이트를 켜지 않는다.
+    static var onLaunch: (() -> Void)?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        Self.onLaunch?()
+        Self.onLaunch = nil
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let queue, queue.isRunning else { return .terminateNow }
+        guard let queue = Self.queue, queue.isRunning else { return .terminateNow }
         Task {
             await queue.cancelAndWait()
             sender.reply(toApplicationShouldTerminate: true)

@@ -21,7 +21,9 @@ final class AppCoordinator {
         self.settings = settings
         self.mainModel = mainModel
         panelController = panelModel.map(QuickPanelController.init(model:))
-        panelModel?.onOpenInMainWindow = { [weak self] text in self?.openInMainWindow(urlText: text) }
+        panelModel?.onOpenInMainWindow = { [weak self] text, playlist in
+            self?.openInMainWindow(urlText: text, playlist: playlist)
+        }
     }
 
     /// 전역 단축키를 등록한다(테스트 호스트에서는 부르지 않는다).
@@ -54,10 +56,14 @@ final class AppCoordinator {
         openMainWindowAction?()
     }
 
-    /// 패널에서 "메인 창에서 고르기": 메인 창에 주소를 넣고(자동으로 불러온다) 창을 연다.
-    func openInMainWindow(urlText: String) {
-        // 메인 창에서 다른 주소를 불러오는 중이었으면 그 조회는 버리고 이 주소를 불러온다.
-        mainModel?.urlText = urlText
+    /// 패널에서 "메인 창에서 고르기": 패널이 불러온 재생목록을 메인 창에 넘겨(다시 조회하지 않음) 창을 연다.
+    /// 메인 창에 불러와 있던 것은 이 재생목록으로 바뀐다(주소란에 새 주소를 붙여 넣은 것과 같다).
+    func openInMainWindow(urlText: String, playlist: Playlist?) {
+        if let playlist {
+            mainModel?.showLoaded(playlist, urlText: urlText)
+        } else {
+            mainModel?.urlText = urlText
+        }
         openMainWindow()
     }
 }

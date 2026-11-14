@@ -15,15 +15,24 @@ private let panelMetadata = VideoMetadata(
     webpageURL: URL(string: videoURL)
 )
 
+private let samplePanelPlaylist = Playlist(id: "PL1", title: "패널 재생목록", entries: [
+    PlaylistEntry(id: "aaaaaaaaaaa", title: "첫 곡", duration: 100),
+    PlaylistEntry(id: "bbbbbbbbbbb", title: "[Deleted video]", duration: nil),
+])
+
 @MainActor
 final class FakeClipboard: ClipboardReading {
     var changeCount = 1
     var text: String?
     private(set) var readCount = 0
+    /// 읽는 도중에 일어나는 일(패널 닫기, 클립보드 바뀜 등)을 흉내 낸다.
+    var duringRead: (() -> Void)?
 
     func webURLText() async -> String? {
         readCount += 1
-        return text
+        let result = text
+        duringRead?()
+        return result
     }
 
     func set(_ text: String?) {
@@ -103,9 +112,9 @@ struct QuickPanelModelTests {
         #expect(f.panel.addWhenReady)
         #expect(f.queue.items.isEmpty)
 
+        // 화면이 그려지지 않아도 모델이 조회 끝을 기다렸다가 추가한다.
         gate.open()
-        await f.panel.extract.waitForTask()
-        f.panel.stageDidChange()  // 화면이 단계 변화를 알린다
+        await f.panel.waitForPendingAdd()
         #expect(f.queue.items.count == 1)
         #expect(f.closeCount() == 1)
         #expect(!f.panel.addWhenReady)
@@ -118,8 +127,7 @@ struct QuickPanelModelTests {
 
         f.panel.submit()
         #expect(f.panel.addWhenReady)
-        await f.panel.extract.waitForTask()
-        f.panel.stageDidChange()
+        await f.panel.waitForPendingAdd()
         #expect(f.queue.items.count == 1)
         #expect(f.closeCount() == 1)
         await f.queue.waitUntilIdle()
@@ -129,8 +137,7 @@ struct QuickPanelModelTests {
         let f = makePanel(engine: FakeEngine(media: .failure(.network)))
         f.panel.extract.urlText = videoURL
         f.panel.submit()
-        await f.panel.extract.waitForTask()
-        f.panel.stageDidChange()
+        await f.panel.waitForPendingAdd()
 
         #expect(f.panel.extract.state == .failed(.network))
         #expect(!f.panel.addWhenReady)
@@ -205,8 +212,7 @@ struct QuickPanelModelTests {
         let f = makePanel(engine: FakeEngine(media: .success(.playlist(playlist)), extractGate: AsyncGate()))
         f.panel.extract.urlText = "https://www.youtube.com/playlist?list=PL1"
         f.panel.submit()
-        await f.panel.extract.waitForTask()
-        f.panel.stageDidChange()
+        await f.panel.waitForPendingAdd()
 
         #expect(f.queue.items.map(\.title) == ["첫 곡", "셋째 곡"])
         #expect(f.queue.items.allSatisfy { $0.subfolder == "내 재생목록" })
@@ -215,15 +221,88 @@ struct QuickPanelModelTests {
         await f.queue.waitUntilIdle()
     }
 
-    @Test func openInMainWindowPassesURLAndCloses() async {
-        let f = makePanel(engine: FakeEngine())
-        var opened: [String] = []
-        f.panel.onOpenInMainWindow = { opened.append($0) }
-        f.panel.extract.urlText = "https://www.youtube.com/playlist?list=PL1"
+    @Test func openInMainWindowHandsOverLoadedPlaylist() async {
+        let playlistURL = "https://www.youtube.com/playlist?list=PL1"
+        let f = makePanel(engine: FakeEngine(media: .success(.playlist(samplePanelPlaylist))))
+        var opened: [(String, Playlist?)] = []
+        f.panel.onOpenInMainWindow = { opened.append(($0, $1)) }
+        f.panel.extract.urlText = playlistURL
+        f.panel.extract.fetch()
+        await f.panel.extract.waitForTask()
 
         f.panel.openInMainWindow()
-        #expect(opened == ["https://www.youtube.com/playlist?list=PL1"])
+        #expect(opened.count == 1)
+        #expect(opened.first?.0 == playlistURL)
+        #expect(opened.first?.1 == samplePanelPlaylist)
         #expect(f.closeCount() == 1)
+    }
+
+    @Test func closingWhileReadingClipboardDoesNotFill() async {
+        let clipboard = FakeClipboard()
+        clipboard.set(videoURL)
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata))), clipboard: clipboard)
+        clipboard.duringRead = { f.panel.dismiss() }
+
+        await f.panel.prepareForPresentation()
+        #expect(f.panel.extract.urlText.isEmpty)
+        #expect(f.engine.fetchCount == 0)
+    }
+
+    @Test func clipboardChangedWhileReadingIsNotFilled() async {
+        let clipboard = FakeClipboard()
+        clipboard.set(videoURL)
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata))), clipboard: clipboard)
+        clipboard.duringRead = { clipboard.set("https://youtu.be/xyz789") }
+
+        await f.panel.prepareForPresentation()
+        #expect(f.panel.extract.urlText.isEmpty)
+        #expect(f.engine.fetchCount == 0)
+    }
+
+    @Test func dismissCancelsPendingAdd() async {
+        let gate = AsyncGate()
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata)), fetchGate: gate))
+        f.panel.extract.urlText = videoURL
+        f.panel.submit()
+        #expect(f.panel.addWhenReady)
+        f.panel.dismiss()
+        gate.open()
+        await f.panel.extract.waitForTask()
+        await f.panel.waitForPendingAdd()
+
+        #expect(f.queue.items.isEmpty)
+        #expect(!f.panel.addWhenReady)
+    }
+}
+
+/// 패널이 불러온 재생목록을 메인 창이 다시 조회하지 않고 받는다.
+@MainActor
+struct ShowLoadedPlaylistTests {
+    @Test func showsPlaylistWithoutFetchingAndKeepsIt() async throws {
+        let engine = FakeEngine(media: .success(.video(panelMetadata)))
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-panel-test-\(UUID().uuidString)")!)
+        let queue = ExtractQueue(engine: engine, notifier: SilentNotifier())
+        let model = ExtractViewModel(settings: settings, engine: engine, queue: queue, autoFetchDelay: .milliseconds(20))
+        // 메인 창에 다른 영상이 불러와 있던 상태
+        model.urlText = videoURL
+        model.fetch()
+        await model.waitForTask()
+
+        let playlistURL = "https://www.youtube.com/playlist?list=PL1"
+        model.showLoaded(samplePanelPlaylist, urlText: playlistURL)
+        #expect(model.urlText == playlistURL)
+        #expect(model.state == .playlist(samplePanelPlaylist))
+        #expect(model.selectedEntryIDs == ["aaaaaaaaaaa"])
+
+        // 자동 불러오기가 돌지 않는다.
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(engine.fetchCount == 1)
+        #expect(model.state == .playlist(samplePanelPlaylist))
+        // Return은 다시 불러오지 않고 대기열에 넣는다.
+        model.submit()
+        #expect(queue.items.map(\.title) == ["첫 곡"])
+        queue.cancelAll()
+        await queue.waitUntilIdle()
     }
 }
 
