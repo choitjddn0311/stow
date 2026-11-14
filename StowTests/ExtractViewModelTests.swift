@@ -224,12 +224,117 @@ struct ExtractViewModelTests {
         #expect(!model.isBusy)
     }
 
+    // MARK: - 자동 불러오기
+
+    private func autoModel(_ engine: any AudioExtracting) -> ExtractViewModel {
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        settings.outputDirectory = Self.outputDirectory
+        return ExtractViewModel(
+            settings: settings, engine: engine, notifier: RecordingNotifier(), autoFetchDelay: .milliseconds(30)
+        )
+    }
+
+    /// 조건이 맞을 때까지(최대 3초) 기다린다.
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<300 where !condition() {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    @Test func pastingURLLoadsAutomatically() async {
+        let engine = FakeEngine(metadata: .success(metadata))
+        let model = autoModel(engine)
+        model.urlText = validURL
+        #expect(model.state == .idle)  // 바로 조회하지 않고 잠시 기다린다
+        await waitUntil { model.state == .ready(metadata) }
+        #expect(model.state == .ready(metadata))
+        #expect(engine.fetchCount == 1)
+    }
+
+    @Test func typingQuicklyFetchesOnlyTheLastText() async {
+        let engine = FakeEngine(metadata: .success(metadata))
+        let model = autoModel(engine)
+        model.urlText = "https://youtu.be/a"
+        model.urlText = "https://youtu.be/ab"
+        model.urlText = "https://youtu.be/abc"
+        await waitUntil { model.state == .ready(metadata) }
+        #expect(engine.fetchedURLs == [URL(string: "https://youtu.be/abc")!])
+    }
+
+    @Test func invalidTextShowsErrorAfterPause() async {
+        let engine = FakeEngine(metadata: .success(metadata))
+        let model = autoModel(engine)
+        model.urlText = "https://example.com/watch?v=1"
+        await waitUntil { model.state != .idle }
+        #expect(model.state == .failed(.invalidURL, nil))
+        #expect(engine.fetchCount == 0)
+
+        model.urlText = ""  // 지우면 오류도 사라진다
+        #expect(model.state == .idle)
+    }
+
+    /// 조회 중에 주소를 바꾸면 이전 조회를 버리고 새 주소를 불러온다.
+    @Test func changingURLDuringFetchRestarts() async {
+        let other = VideoMetadata(id: "other", title: "다른 곡")
+        let engine = PerURLEngine(slowURL: URL(string: validURL)!, fastResult: other)
+        let model = autoModel(engine)
+        model.urlText = validURL
+        await waitUntil { model.state == .fetching }
+        #expect(model.state == .fetching)
+
+        model.urlText = "https://youtu.be/other"
+        await waitUntil { model.state == .ready(other) }
+        #expect(model.state == .ready(other))
+        // 취소된 이전 조회의 결과가 나중에 덮어쓰지 않는다.
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(model.state == .ready(other))
+    }
+
+    @Test func returnFetchesImmediately() async {
+        let engine = FakeEngine(metadata: .success(metadata))
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        let model = ExtractViewModel(
+            settings: settings, engine: engine, notifier: RecordingNotifier(), autoFetchDelay: .seconds(60)
+        )
+        model.urlText = validURL
+        model.submit()
+        #expect(model.state == .fetching)
+        await model.waitForTask()
+        #expect(model.state == .ready(metadata))
+        #expect(engine.fetchCount == 1)
+    }
+
     @Test func displayPathAbbreviatesOnlyHomePrefix() {
         let home = URL(filePath: "/Users/choi", directoryHint: .isDirectory)
         #expect(DisplayPath.abbreviated(URL(filePath: "/Users/choi/Music"), home: home) == "~/Music")
         #expect(DisplayPath.abbreviated(URL(filePath: "/Users/choi"), home: home) == "~")
         #expect(DisplayPath.abbreviated(URL(filePath: "/Users/choi2/Music"), home: home) == "/Users/choi2/Music")
         #expect(DisplayPath.abbreviated(URL(filePath: "/Volumes/X/Users/choi/a"), home: home) == "/Volumes/X/Users/choi/a")
+    }
+}
+
+/// `slowURL`은 취소될 때까지 끝나지 않고, 다른 주소는 바로 `fastResult`를 돌려주는 엔진.
+final class PerURLEngine: AudioExtracting {
+    let slowURL: URL
+    let fastResult: VideoMetadata
+
+    init(slowURL: URL, fastResult: VideoMetadata) {
+        self.slowURL = slowURL
+        self.fastResult = fastResult
+    }
+
+    func fetchMetadata(for url: URL) async throws -> VideoMetadata {
+        if url == slowURL {
+            try await Task.sleep(for: .seconds(600))
+        }
+        return fastResult
+    }
+
+    func extract(
+        _ url: URL, options: ExtractOptions, fileName: String,
+        progress: @escaping @Sendable (ExtractProgress) -> Void
+    ) async throws -> URL {
+        throw EngineError.network
     }
 }
 

@@ -30,15 +30,17 @@ struct ExtractView: View {
 
     // MARK: - 주소 입력
 
+    /// 주소를 붙여 넣으면 자동으로 불러온다(별도 버튼 없음). Return은 바로 불러오거나, 불러온 뒤에는 추출한다.
+    /// 조회 중에도 주소를 바꿀 수 있고, 추출 중에만 잠근다.
     private var urlField: some View {
-        HStack {
-            TextField("유튜브 영상 주소를 붙여 넣으세요", text: $model.urlText)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { model.submit() }
-                .disabled(model.isBusy)
-            Button("불러오기") { model.fetch() }
-                .disabled(!model.canFetch)
-        }
+        TextField("유튜브 영상 주소를 붙여 넣으세요", text: $model.urlText)
+            .textFieldStyle(.roundedBorder)
+            .onSubmit { model.submit() }
+            .disabled(isExtracting)
+    }
+
+    private var isExtracting: Bool {
+        if case .extracting = model.state { true } else { false }
     }
 
     // MARK: - 영상 정보
@@ -47,7 +49,7 @@ struct ExtractView: View {
     private var content: some View {
         switch model.state {
         case .idle:
-            Text("주소를 붙여 넣고 불러오기를 누르면 영상 정보가 표시됩니다.")
+            Text("주소를 붙여 넣으면 영상 정보를 자동으로 불러옵니다.")
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 90, alignment: .leading)
         case .fetching:

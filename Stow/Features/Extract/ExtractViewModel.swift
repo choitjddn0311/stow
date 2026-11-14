@@ -27,14 +27,10 @@ final class ExtractViewModel {
         let message: String
     }
 
-    /// 주소 입력란. 불러온 뒤 주소를 바꾸면 처음 상태로 돌아간다.
+    /// 주소 입력란. 붙여 넣거나 입력을 멈추면 `autoFetchDelay` 뒤에 자동으로 불러온다.
+    /// 불러온 뒤 주소를 바꾸면 처음 상태로 돌아가고 새 주소를 불러온다.
     var urlText = "" {
-        didSet {
-            guard urlText != oldValue, !isBusy, loadedURLText != nil, urlText != loadedURLText else { return }
-            loadedURLText = nil
-            videoURL = nil
-            state = .idle
-        }
+        didSet { urlTextDidChange(from: oldValue) }
     }
 
     private(set) var state: State = .idle
@@ -47,11 +43,21 @@ final class ExtractViewModel {
     @ObservationIgnored private var videoURL: URL?
     @ObservationIgnored private var loadedURLText: String?
     @ObservationIgnored private var currentRunID: UUID?
+    @ObservationIgnored private var currentFetchID: UUID?
+    @ObservationIgnored private var autoFetchTask: Task<Void, Never>?
+    /// 입력을 멈춘 뒤 자동으로 불러오기까지 기다리는 시간. 한 글자씩 입력할 때마다 조회하지 않게 한다.
+    @ObservationIgnored private let autoFetchDelay: Duration
 
-    init(settings: AppSettings, engine: any AudioExtracting, notifier: any CompletionNotifying) {
+    init(
+        settings: AppSettings,
+        engine: any AudioExtracting,
+        notifier: any CompletionNotifying,
+        autoFetchDelay: Duration = .milliseconds(500)
+    ) {
         self.settings = settings
         self.engine = engine
         self.notifier = notifier
+        self.autoFetchDelay = autoFetchDelay
     }
 
     // MARK: - 화면에서 쓰는 값
@@ -82,8 +88,9 @@ final class ExtractViewModel {
 
     // MARK: - 동작
 
-    /// 주소를 검증하고 영상 정보를 불러온다.
+    /// 주소를 검증하고 영상 정보를 불러온다(자동 불러오기도 이 함수를 쓴다).
     func fetch() {
+        autoFetchTask?.cancel()
         guard canFetch else { return }
         let text = urlText
         let url: URL
@@ -96,15 +103,56 @@ final class ExtractViewModel {
         videoURL = url
         loadedURLText = text
         state = .fetching
+        let fetchID = UUID()
+        currentFetchID = fetchID
         task = Task {
+            let result: Result<VideoMetadata, any Error>
             do {
-                let metadata = try await engine.fetchMetadata(for: url)
-                state = .ready(metadata)
-            } catch is CancellationError {
-                state = .idle
+                result = .success(try await engine.fetchMetadata(for: url))
             } catch {
+                result = .failure(error)
+            }
+            // 주소를 바꿔 다른 조회가 시작되었으면 이 결과는 버린다.
+            guard currentFetchID == fetchID else { return }
+            currentFetchID = nil
+            switch result {
+            case .success(let metadata):
+                state = .ready(metadata)
+            case .failure(is CancellationError):
+                state = .idle
+            case .failure(let error):
                 fail(error, metadata: nil, retry: .fetch)
             }
+        }
+    }
+
+    /// 주소가 바뀌었을 때: 이전 결과를 지우고, 잠시 뒤 새 주소를 자동으로 불러온다.
+    private func urlTextDidChange(from oldValue: String) {
+        guard urlText != oldValue else { return }
+        // 추출 중에는 주소란이 잠겨 있다. 코드에서 바뀌어도 진행 중인 추출은 건드리지 않는다.
+        if case .extracting = state { return }
+        autoFetchTask?.cancel()
+
+        let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 불러온 주소와 같으면(앞뒤 공백만 바뀐 경우 포함) 그대로 둔다.
+        if let loadedURLText, trimmed == loadedURLText.trimmingCharacters(in: .whitespacesAndNewlines) { return }
+
+        if case .fetching = state {
+            // 조회 중에 주소를 바꾸면 그 조회를 버리고 새로 불러온다.
+            currentFetchID = nil
+            task?.cancel()
+        }
+        loadedURLText = nil
+        videoURL = nil
+        retryAlert = nil
+        state = .idle
+        guard !trimmed.isEmpty else { return }
+
+        let delay = autoFetchDelay
+        autoFetchTask = Task {
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            fetch()
         }
     }
 
