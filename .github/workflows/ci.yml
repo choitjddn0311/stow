@@ -20,7 +20,7 @@ jobs:
   build-test:
     name: build-test
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,21 @@ jobs:
           sudo xcode-select -s "$XCODE_APP/Contents/Developer"
           xcodebuild -version
           swift --version
+
+      # 엔진 다운로드·빌드 캐시와 준비된 engine/을 함께 캐시한다. 스크립트가 바뀌면 키가 바뀌어 다시 준비한다.
+      - name: Cache engine
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/engine-cache
+            engine
+          key: engine-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-binaries.sh', 'scripts/build-ffmpeg.sh', 'scripts/lib/common.sh') }}
+
+      - name: Fetch engine binaries
+        run: scripts/fetch-binaries.sh
+
+      - name: Build ffmpeg (LGPL)
+        run: scripts/build-ffmpeg.sh
 
       - name: Test (Debug)
         run: |
@@ -67,3 +82,21 @@ jobs:
             echo "::error::샌드박스 엔타이틀먼트가 포함됨"; exit 1
           fi
           echo "LSMinimumSystemVersion: $(plutil -extract LSMinimumSystemVersion raw "$APP/Contents/Info.plist")"
+
+      - name: Verify bundled engine
+        run: |
+          APP=build/DerivedData/Build/Products/Release/Stow.app
+          BIN="$APP/Contents/Resources/bin"
+          codesign --verify --deep --strict "$APP" || { echo "::error::앱 서명 검증 실패"; exit 1; }
+          for f in python/bin/python3.13 deno ffmpeg ffprobe; do
+            FLAGS=$(codesign -dv "$BIN/$f" 2>&1 | grep flags=)
+            echo "$f: $FLAGS"
+            echo "$FLAGS" | grep -q runtime || { echo "::error::$f 에 Hardened Runtime 미적용"; exit 1; }
+          done
+          echo "yt-dlp: $("$BIN/python/bin/python3" -I -B "$BIN/yt-dlp" --version)"
+          echo "deno: $("$BIN/deno" eval 'console.log(Deno.version.deno)')"
+          "$BIN/ffmpeg" -version | head -1
+          CONF=$("$BIN/ffmpeg" -hide_banner -buildconf)
+          if grep -qE -- '--enable-(gpl|nonfree|version3)' <<<"$CONF"; then
+            echo "::error::ffmpeg 구성에 GPL/nonfree/version3 포함"; exit 1
+          fi
