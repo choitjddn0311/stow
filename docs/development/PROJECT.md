@@ -40,7 +40,7 @@
 | 프로젝트 관리 | Xcode 프로젝트(`.xcodeproj`) 직접 사용, 폴더 동기화 그룹 사용(파일 추가 시 pbxproj 수정 불필요), 공유 스킴 `Stow` |
 | Swift 언어 모드 | Swift 6 (엄격한 동시성) |
 | 테스트 | Swift Testing (`@Test`, `#expect`), 앱 호스트 테스트 대상 `StowTests` |
-| 번들 ID | `io.github.choitjddn0311.stow` (2026-11-14 확정, 도메인이 없어 GitHub 아이디를 거꾸로 씀). 5a에서 프로젝트에 적용(현재 코드는 임시값 `com.example.stow`) |
+| 번들 ID | `io.github.choitjddn0311.stow` (2026-11-14 확정, 도메인이 없어 GitHub 아이디를 거꾸로 씀, 5a에서 적용). 테스트 대상은 `.tests` |
 | 서명(개발) | 로컬 실행용 ad-hoc 서명(`-`), 팀 미지정 |
 | 추출 엔진 | yt-dlp **zipimport 버전**(Unlicense) + 번들한 Python 런타임(python-build-standalone, CPython 3.13)으로 실행. 공식 macOS 단독 실행 파일은 GPLv3+ 코드를 포함해 쓰지 않음(2026-11-14 변경) |
 | JS 런타임 | deno(MIT), 앱 번들에 포함. yt-dlp의 유튜브 전체 지원(yt-dlp-ejs)에 필요(2026-11-14 추가) |

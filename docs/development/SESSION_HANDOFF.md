@@ -50,7 +50,7 @@
 - 테스트 멈춤 원인과 수정: 스모크 테스트가 `ImageRenderer`로 추출 화면을 그리면 SwiftUI 런타임 이슈("Accessing FocusState's value outside of the body of a View")가 생긴다. XCTest가 이를 보고하려고 빌드 산출물을 심볼화하며 `~/Desktop` 아래 파일을 열고, 빌드마다 ad-hoc 서명이 바뀐 테스트 호스트가 데스크탑 폴더 권한 확인(TCC `kTCCServiceSystemPolicyDesktopFolder`)에 걸려 멈췄다(로그로 확인). `NSHostingView` 렌더링으로 바꾼 뒤 런타임 이슈 0건, 연속 5회 정상 종료(각 4초)
 
 ## 4단계 수동 시나리오 체크리스트 (완료 조건, 사용자 점검: 2026-11-14 전체 통과)
-앱 실행: Xcode에서 실행하거나 `open build/DerivedData/Build/Products/Debug/Stow.app`. 첫 실행을 다시 보려면 `defaults delete com.example.stow`
+앱 실행: Xcode에서 실행하거나 `open build/DerivedData/Build/Products/Debug/Stow.app`. 첫 실행을 다시 보려면 `defaults delete io.github.choitjddn0311.stow`
 - [x] 첫 실행 이용 고지가 뜨고, "종료"는 앱 종료, "동의하고 시작"은 추출 화면으로 이동. 다시 실행하면 고지가 뜨지 않음
 - [x] 정상 추출 MP3(음질 선택), WAV, FLAC: 진행률 표시, 완료 알림, Finder에서 보기, 파일 재생
 - [x] 주소를 붙여 넣으면 버튼 없이 자동으로 영상 정보를 불러옴. 불러오는 중 다른 주소로 바꾸면 새 주소로 다시 불러옴
@@ -128,7 +128,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 - WAV는 원본(유튜브 opus/AAC, 보통 48kHz)을 16비트로 저장한다. 샘플레이트·비트 깊이 옵션은 미정(PROJECT.md 8장)
 - `ProcessRunner`의 파이프는 `pipe()` 뒤 `FD_CLOEXEC`를 설정한다(macOS에 `pipe2` 없음). 그 사이 다른 곳에서 fork/exec하면 fd가 샐 수 있으나 유예 시간 뒤 종료를 알리므로 멈추지는 않음
 - 오픈소스 고지 표시 방법, LGPL 소스 제공 방식 미정(라이선스 원문은 번들 `bin/licenses/`에 포함)
-- 번들 ID 확정: `io.github.choitjddn0311.stow`(사용자 결정 2026-11-14). 코드는 아직 임시값 `com.example.stow` → 5a 첫 작업으로 적용(테스트 대상은 `.tests`). 적용 후에는 개발 중 저장된 설정이 새 ID로 옮겨지지 않으며, 첫 실행 고지를 다시 보려면 `defaults delete io.github.choitjddn0311.stow`. Apple Developer 계정은 5b(서명·공증)에서만 필요
+- 번들 ID: `io.github.choitjddn0311.stow`(사용자 결정 2026-11-14, 5a에서 적용, 테스트 대상은 `.tests`). 적용 후에는 개발 중 저장된 설정이 새 ID로 옮겨지지 않으며, 첫 실행 고지를 다시 보려면 `defaults delete io.github.choitjddn0311.stow`. Apple Developer 계정은 5b(서명·공증)에서만 필요
 - 그 밖의 미정 사항은 `PROJECT.md` 8장 참고
 
 ## 다음 작업
