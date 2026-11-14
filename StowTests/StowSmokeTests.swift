@@ -22,18 +22,33 @@ struct StowSmokeTests {
         #expect(parts.dropFirst().allSatisfy { $0 == 0 })
     }
 
-    /// 루트 화면을 실제로 렌더링해 내용(텍스트)이 그려지는지 확인한다.
-    /// 배경이 투명하므로, 그려진 픽셀(알파 > 0)이 없으면 화면 내용이 비어 있는 것이다.
-    @Test func rootViewRendersContent() throws {
-        let renderer = ImageRenderer(content: RootView())
-        renderer.scale = 1
-        let image = try #require(renderer.cgImage)
-        #expect(image.width >= 420)
-        #expect(image.height >= 300)
-        #expect(Self.drawnPixelCount(in: image) > 0)
+    /// 루트 화면을 실제 앱과 같은 방식(`NSHostingView`)으로 그려 내용이 그려지는지 확인한다(이용 고지, 추출 화면 각각).
+    ///
+    /// `ImageRenderer`는 쓰지 않는다. TextField 같은 기본 컨트롤을 그리지 못하고 SwiftUI 런타임 이슈
+    /// ("Accessing FocusState's value outside of the body of a View")를 낸다. XCTest가 이 이슈를 보고하며
+    /// 빌드 산출물을 읽을 때, 저장소가 데스크탑 폴더에 있으면 macOS 권한 확인(TCC)에 걸려 테스트가 끝나지 않는다.
+    @Test(arguments: [false, true])
+    func rootViewRendersContent(noticeAccepted: Bool) throws {
+        let defaults = try #require(UserDefaults(suiteName: "stow-smoke-\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.acceptedNoticeVersion = noticeAccepted ? UsageNotice.version : 0
+        let model = ExtractViewModel(
+            settings: settings, engine: YtDlpClient(engine: try EngineLocator.bundled()), notifier: SilentNotifier()
+        )
+        let view = NSHostingView(rootView: RootView(model: model, settings: settings))
+        // 최소 크기(560×500)를 지키는지 확인한 뒤 기본 창 크기로 그린다.
+        #expect(view.fittingSize.width >= 560)
+        #expect(view.fittingSize.height >= 500)
+        view.frame = NSRect(x: 0, y: 0, width: 600, height: 540)
+        view.layoutSubtreeIfNeeded()
+        let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        let image = try #require(bitmap.cgImage)
+        // 화면이 비어 있으면 모든 픽셀이 같은 색이다.
+        #expect(Self.distinctPixelCount(in: image) > 10)
     }
 
-    private static func drawnPixelCount(in image: CGImage) -> Int {
+    private static func distinctPixelCount(in image: CGImage) -> Int {
         let width = image.width, height = image.height
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
@@ -47,6 +62,11 @@ struct StowSmokeTests {
             return true
         }
         guard drawn else { return 0 }
-        return stride(from: 3, to: pixels.count, by: 4).reduce(0) { $0 + (pixels[$1] > 0 ? 1 : 0) }
+        var colors = Set<UInt32>()
+        for offset in stride(from: 0, to: pixels.count, by: 4) {
+            colors.insert(UInt32(pixels[offset]) << 24 | UInt32(pixels[offset + 1]) << 16
+                | UInt32(pixels[offset + 2]) << 8 | UInt32(pixels[offset + 3]))
+        }
+        return colors.count
     }
 }
