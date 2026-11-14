@@ -32,8 +32,9 @@ struct StowSmokeTests {
         let defaults = try #require(UserDefaults(suiteName: "stow-smoke-\(UUID().uuidString)"))
         let settings = AppSettings(defaults: defaults)
         settings.acceptedNoticeVersion = noticeAccepted ? UsageNotice.version : 0
+        let engine = YtDlpClient(engine: try EngineLocator.bundled())
         let model = ExtractViewModel(
-            settings: settings, engine: YtDlpClient(engine: try EngineLocator.bundled()), notifier: SilentNotifier()
+            settings: settings, engine: engine, queue: ExtractQueue(engine: engine, notifier: SilentNotifier())
         )
         let view = NSHostingView(rootView: RootView(model: model, settings: settings))
         // 최소 크기(560×500)를 지키는지 확인한 뒤 기본 창 크기로 그린다.

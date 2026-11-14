@@ -4,12 +4,13 @@ import Foundation
 /// 영상 ID 형식 등 세부 검증은 yt-dlp에 맡긴다.
 enum YouTubeURL {
     private static let hosts: Set<String> = ["youtube.com", "youtu.be"]
-    /// 재생목록·채널 페이지 경로. yt-dlp가 모든 영상을 처리하므로 미리 거부한다(MVP는 단일 영상만).
-    private static let collectionPathPrefixes = ["/playlist", "/@", "/channel/", "/c/", "/user/", "/feed/"]
+    /// 채널·피드 페이지 경로. 영상 수가 많고 재생목록과 달리 범위가 정해지지 않아 받지 않는다.
+    /// 재생목록(`/playlist?list=`)은 받는다.
+    private static let channelPathPrefixes = ["/@", "/channel/", "/c/", "/user/", "/feed/"]
 
     /// 유튜브 영상 URL이면 정규화한 URL을 돌려준다.
     /// - 스킴이 없으면(예: `youtu.be/abc`) https로 본다.
-    /// - 유튜브가 아니면 `.invalidURL`, 재생목록·채널 페이지면 `.playlistNotSupported`를 던진다.
+    /// - 유튜브가 아니면 `.invalidURL`, 채널 페이지면 `.channelNotSupported`를 던진다.
     static func parse(_ input: String) throws(EngineError) -> URL {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         // 스킴은 문자열 맨 앞에서만 찾는다(쿼리 안의 "https://"는 스킴이 아니다).
@@ -25,8 +26,8 @@ enum YouTubeURL {
             throw .invalidURL
         }
         let path = components.path.lowercased()
-        if host != "youtu.be", collectionPathPrefixes.contains(where: { path.hasPrefix($0) }) {
-            throw .playlistNotSupported
+        if host != "youtu.be", channelPathPrefixes.contains(where: { path.hasPrefix($0) }) {
+            throw .channelNotSupported
         }
         return url
     }

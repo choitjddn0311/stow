@@ -25,9 +25,9 @@ struct StowApp: App {
             let source = EngineSource(bundled)
             var client = YtDlpClient(engine: bundled)
             client.engineSource = source
-            _model = State(initialValue: ExtractViewModel(
-                settings: settings, engine: client, notifier: SystemCompletionNotifier()
-            ))
+            // 추출은 대기열이 한 번에 하나씩 한다. 화면(ViewModel)은 불러오기와 대기열에 추가를 맡는다.
+            let queue = ExtractQueue(engine: client, notifier: SystemCompletionNotifier())
+            _model = State(initialValue: ExtractViewModel(settings: settings, engine: client, queue: queue))
             _engineUpdates = State(initialValue: EngineUpdateCoordinator(
                 updater: EngineUpdater(storage: EngineUpdater.defaultStorage(), python: bundled.python),
                 source: source,
@@ -45,7 +45,7 @@ struct StowApp: App {
         WindowGroup {
             RootView(model: model, settings: settings, engineError: engineError)
                 .onAppear {
-                    appDelegate.model = model
+                    appDelegate.queue = model?.queue
                     // 테스트 호스트나 배포 전 실행 확인 때는 네트워크로 엔진을 받지 않는다.
                     if !Self.updatersDisabled { engineUpdates?.start() }
                 }
@@ -76,12 +76,12 @@ struct StowApp: App {
 /// 엔진은 별도 프로세스 그룹에서 돌기 때문에 앱만 끝나면 남는다.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var model: ExtractViewModel?
+    var queue: ExtractQueue?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model, model.isBusy else { return .terminateNow }
+        guard let queue, queue.isRunning else { return .terminateNow }
         Task {
-            await model.cancelAndWait()
+            await queue.cancelAndWait()
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
