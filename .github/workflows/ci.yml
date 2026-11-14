@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build-test
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build & Test
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Stow.xcodeproj \
+            -scheme Stow \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData \
+            test
