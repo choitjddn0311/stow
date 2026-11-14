@@ -58,7 +58,7 @@ Stow/
 ├── Core/Engine/         # EngineLocator, ProcessRunner, YtDlpClient, ProgressParser, EngineError
 ├── Core/Models/         # VideoMetadata, ExtractOptions 등
 ├── Core/Settings/       # AppSettings (UserDefaults)
-└── Resources/bin/       # yt-dlp, ffmpeg, ffprobe (서명 대상)
+└── Resources/bin/       # yt-dlp, ffmpeg, ffprobe (서명 대상, git 미포함·스크립트로 생성)
 StowTests/
 scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, release.sh
 ```
@@ -84,6 +84,7 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, release.sh
 - **샌드박스 끔**: 포함한 실행 파일을 띄우고 임의 폴더에 저장하기 쉽게 하기 위해서다.
 - **Hardened Runtime**: 프로젝트 설정은 YES. 단, Xcode가 Debug 빌드(`ENABLE_DEBUG_DYLIB=YES`)에서는 자동으로 끄므로, 런타임 플래그 확인은 Release 빌드로 한다.
 - **LGPL ffmpeg**: 상용 배포 시 GPL 의무를 피하기 위해서다.
+- **실행 파일은 git에 넣지 않음**: yt-dlp·ffmpeg 바이너리는 `scripts/`로 받거나 빌드해 `Stow/Resources/bin/`에 둔다(버전 고정, 체크섬 검증). 저장소 용량과 라이선스 관리를 위해서다. CI도 같은 스크립트를 실행한다.
 - **보안**: 프로세스 인자는 배열로 전달한다. 포함한 실행 파일도 Hardened Runtime으로 서명한다.
 
 ## 6. 리스크

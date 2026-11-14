@@ -17,7 +17,7 @@
 
 ## Git 규칙 (상세: CONTEXT_GUIDE.md 5장)
 - `main`에 직접 커밋·푸시하지 않는다. 작업 브랜치(`feat/`, `fix/`, `docs/`, `chore/`)에서 작업하고 PR로 병합한다.
-- PR 전 로컬 빌드·테스트 → PR 생성 → CI `build-test` 통과 → `/code-review` → 결과 보고 → **사용자 승인 후** squash 병합.
+- PR 전 로컬 Debug 테스트 → PR 생성 → CI `build-test` 통과 → (코드 변경 PR만) `/code-review` 1회 → 결과 보고 → **사용자 승인 후** squash 병합.
 - 검증 중 하나라도 실패하면 병합하지 않고 수정한다.
 
 ## Context Management
