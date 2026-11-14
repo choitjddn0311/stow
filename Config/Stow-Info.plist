@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sparkle 앱 자동 업데이트(MVP 이후 2번). 나머지 Info.plist 값은 Xcode가 빌드 설정(INFOPLIST_KEY_*)으로 만든다. -->
+	<!-- 업데이트 목록: 최신 릴리스에 함께 올리는 appcast.xml(scripts/release.sh가 생성·서명) -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/choitjddn0311/stow/releases/latest/download/appcast.xml</string>
+	<!-- EdDSA 공개키. 개인키는 릴리스하는 Mac의 키체인(계정 io.github.choitjddn0311.stow)에 있다. -->
+	<key>SUPublicEDKey</key>
+	<string>fWCstUEQ1NVBOQvE4GJPWcnjxorWPKAGqZBRMVfEN0w=</string>
+	<!-- 자동 확인을 처음부터 켠다(사용자 결정: 하루 한 번 확인 후 설치 여부를 묻는다). -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<!-- release.sh가 appcast.xml에 EdDSA 서명을 넣는다. 서명이 없거나 맞지 않는 업데이트 목록은 받지 않는다. -->
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<!-- 받은 업데이트 파일을 풀기 전에 EdDSA 서명부터 확인한다. -->
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+</dict>
+</plist>

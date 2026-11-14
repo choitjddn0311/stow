@@ -23,7 +23,7 @@
 
 ### MVP 이후 (우선순위 순)
 1. 앱 안에서 엔진(yt-dlp) 업데이트
-2. 앱 자동 업데이트(Sparkle): **미정**
+2. 앱 자동 업데이트(Sparkle): **도입**(2026-11-14 사용자 결정, 5장 참고)
 3. 여러 URL 대기열, 재생목록 추출
 4. 결제와 라이선스: **미정**
 5. 글로벌 단축키 플로팅 패널(2026-11-14 추가, 순서는 미정): 어느 앱에서든 전역 단축키를 누르면 Stow의 작은 플로팅 패널이 다른 창 위에 뜬다. 주소를 붙여 넣고(또는 클립보드의 유튜브 주소를 채우고) 저장된 설정으로 바로 추출한다. 메인 창을 열지 않고 쓰는 빠른 진입점이다.
@@ -86,6 +86,11 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 
 ## 5. 주요 설계 결정
 - **yt-dlp 사용**: 유튜브가 바뀌어도 커뮤니티가 가장 빨리 고친다. Swift 자체 파서는 자주 고장 나서 배제했다.
+- **앱 자동 업데이트(Sparkle 2, 2026-11-14 사용자 결정)**: 하루 한 번 확인하고, 새 버전이 있으면 변경 사항과 함께 설치 여부를 묻는다(Sparkle 기본 창). 메뉴 "업데이트 확인…".
+  - 업데이트 목록 `appcast.xml`은 최신 릴리스에 함께 올리고 앱은 `releases/latest/download/appcast.xml`을 읽는다(`Config/Stow-Info.plist`의 `SUFeedURL`). `release.sh`가 DMG에 EdDSA 서명을 하고 appcast를 만들어 서명·검증한다
+  - EdDSA 개인키는 릴리스하는 Mac의 키체인(계정 `io.github.choitjddn0311.stow`)에, 공개키는 `SUPublicEDKey`에. **개인키를 잃으면 기존 사용자에게 업데이트를 보낼 수 없으므로 반드시 백업한다**(`generate_keys --account io.github.choitjddn0311.stow -x <파일>`)
+  - Sparkle로 설치한 업데이트에는 격리 표시가 붙지 않아 "그래도 열기"를 다시 하지 않아도 된다. 이미 공개된 0.1.0·0.2.0에는 Sparkle이 없어 Sparkle이 든 버전까지는 한 번 직접 바꿔 설치해야 한다
+  - ad-hoc 서명에서는 라이브러리 검증이 Sparkle.framework 로드를 거부해 실행 즉시 종료되므로 앱에 `disable-library-validation`(`Config/Stow.entitlements`)을 준다. 5b(Developer ID)에서 뺀다
 - **엔진 업데이트**: 앱 릴리스 때 번들 yt-dlp를 갱신하고, 앱 안에서도 yt-dlp를 업데이트한다(MVP 이후 1번, 2026-11-14 구현).
   - 사용자 결정: **자동 확인 + 자동 설치**(앱 시작 시 하루 한 번), **stable 채널**. 앱 메뉴 "엔진 업데이트 확인…"으로 바로 확인
   - 대상은 yt-dlp(zipimport) 하나. Python·deno·ffmpeg는 앱 릴리스로만 갱신한다
@@ -128,7 +133,6 @@ scripts/                 # fetch-binaries.sh, build-ffmpeg.sh, embed-engine.sh, 
 
 ## 8. 미정 사항
 - WAV/FLAC 샘플레이트·비트 깊이 옵션
-- 앱 자동 업데이트(Sparkle) 도입 여부
 - 수익 모델, 결제
 - 이용 고지 문구의 법률 검토(MVP는 초안 사용)
 - 출력 파일명 규칙: 영상 제목, 충돌 시 번호 붙임(2026-11-14 확정). 다른 규칙(채널명 포함 등) 선택 기능은 MVP 이후
