@@ -122,6 +122,12 @@ SHA-256: \`$(cut -d' ' -f1 "$DMG.sha256")\`
 
 본인이 저작권을 가지고 있거나 사용 허락을 받은 영상에만 사용하세요. 오픈소스 구성 요소와 라이선스는 [README](https://github.com/choitjddn0311/stow#오픈소스-구성-요소)를 참고하세요.
 EOF
+  # 버전별 변경 사항(docs/release/notes/<버전>.md)이 있으면 제목 바로 아래에 넣는다.
+  changes="docs/release/notes/${VERSION}.md"
+  if [[ -f $changes ]]; then
+    { echo "## Stow $VERSION"; echo; cat "$changes"; echo; tail -n +2 "$notes"; } > "$notes.tmp"
+    mv "$notes.tmp" "$notes"
+  fi
   gh release create "$TAG" "$DMG" "$DMG.sha256" --draft --title "Stow $VERSION" \
     --notes-file "$notes" --target "$(git rev-parse HEAD)"
   log "GitHub Releases에 초안 ${TAG}를 만들었습니다. GitHub에서 확인한 뒤 공개하세요."
