@@ -18,24 +18,47 @@ struct UsageNoticeView: View {
     let onAccept: () -> Void
     var onQuit: () -> Void = { NSApplication.shared.terminate(nil) }
 
+    /// macOS 경고창 형식: 아이콘 → 제목 → 본문 → 세로로 쌓은 버튼(주 동작이 위).
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(UsageNotice.title, systemImage: "exclamationmark.shield")
-                .font(.title2.bold())
-            ForEach(UsageNotice.paragraphs, id: \.self) { paragraph in
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.shield")
+                .font(.system(size: 30, weight: .regular))
+                .foregroundStyle(.tint)
+                .frame(width: 64, height: 64)
+                .background(.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .accessibilityHidden(true)
+            Text(UsageNotice.title)
+                .font(.title3.weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            // 문단 수가 바뀌어도 모두 보이도록 반복한다(첫 문단은 본문, 나머지는 보조 문구).
+            ForEach(Array(UsageNotice.paragraphs.enumerated()), id: \.offset) { index, paragraph in
                 Text(paragraph)
+                    .foregroundStyle(index == 0 ? .primary : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 0)
-            HStack {
-                Spacer()
-                Button(UsageNotice.quitButton, action: onQuit)
-                Button(UsageNotice.acceptButton, action: onAccept)
-                    .keyboardShortcut(.defaultAction)
+            VStack(spacing: 8) {
+                Button(action: onAccept) {
+                    Text(UsageNotice.acceptButton).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                Button(action: onQuit) {
+                    Text(UsageNotice.quitButton).frame(maxWidth: .infinity)
+                }
             }
+            .controlSize(.large)
+            .padding(.top, 8)
         }
+        .multilineTextAlignment(.center)
         .padding(28)
-        .frame(maxWidth: 520)
+        .frame(width: 420)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor))
+        }
+        .shadow(color: .black.opacity(0.12), radius: 15, y: 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
