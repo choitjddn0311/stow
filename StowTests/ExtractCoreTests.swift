@@ -12,6 +12,8 @@ struct YouTubeURLTests {
         "youtu.be/abc123",
         "  https://www.youtube.com/shorts/abc123\n",
         "https://WWW.YOUTUBE.COM/watch?v=abc123",
+        "youtube.com/watch?v=abc123&redirect=https://x",  // 쿼리 안의 "://"는 스킴이 아니다
+        "https://youtu.be/playlist",  // youtu.be는 영상 ID만 온다
     ])
     func acceptsYouTubeURLs(_ input: String) throws {
         let url = try YouTubeURL.parse(input)
@@ -30,6 +32,19 @@ struct YouTubeURLTests {
     ])
     func rejectsOtherInput(_ input: String) {
         #expect(throws: EngineError.invalidURL) { try YouTubeURL.parse(input) }
+    }
+
+    /// 재생목록·채널 주소는 yt-dlp를 실행하기 전에 거부한다.
+    @Test(arguments: [
+        "https://www.youtube.com/playlist?list=PL123",
+        "https://www.youtube.com/@channel",
+        "https://www.youtube.com/@channel/videos",
+        "https://www.youtube.com/channel/UC123",
+        "https://www.youtube.com/c/name",
+        "https://www.youtube.com/user/name",
+    ])
+    func rejectsPlaylistAndChannelPages(_ input: String) {
+        #expect(throws: EngineError.playlistNotSupported) { try YouTubeURL.parse(input) }
     }
 }
 
@@ -102,6 +117,9 @@ struct YtDlpErrorMapperTests {
         ("ERROR: unable to write data: [Errno 28] No space left on device", .diskFull),
         ("ERROR: unable to open for writing: [Errno 13] Permission denied: '/x.part'", .permissionDenied),
         ("ERROR: Postprocessing: audio conversion failed: Error opening output files", .conversionFailed),
+        ("ERROR: [youtube] abc: Unable to download webpage: HTTP Error 429: Too Many Requests", .blockedByYouTube),
+        ("ERROR: unable to download video data: HTTP Error 403: Forbidden", .blockedByYouTube),
+        ("ERROR: [youtube] abc: Video unavailable. This content isn’t available, try again later.", .blockedByYouTube),
     ])
     func mapsKnownErrors(_ line: String, _ expected: EngineError) {
         #expect(YtDlpErrorMapper.map(stderr: ["WARNING: ignore me", line]) == expected)
@@ -111,6 +129,17 @@ struct YtDlpErrorMapperTests {
         let error = YtDlpErrorMapper.map(stderr: ["ERROR: something new happened"])
         #expect(error == .unknown("ERROR: something new happened"))
         #expect(error.localizedDescription.contains("알 수 없는 오류"))
+    }
+
+    /// `ERROR:` 줄이 없으면 경고·진행률 줄로 분류하지 않고, 남은 마지막 줄을 원문으로 남긴다.
+    @Test func ignoresWarningsWhenNoErrorLine() {
+        let error = YtDlpErrorMapper.map(stderr: [
+            "[stow:postprocess] started ExtractAudio",
+            "WARNING: ffmpeg timed out",
+            "Traceback (most recent call last):",
+            "KeyboardInterrupt",
+        ])
+        #expect(error == .unknown("Traceback (most recent call last):\nKeyboardInterrupt"))
     }
 }
 
@@ -135,6 +164,13 @@ struct VideoMetadataTests {
         #expect(metadata.title == "x")
         #expect(metadata.duration == nil)
         #expect(metadata.uploader == "c")
+    }
+
+    @Test func rejectsPlaylistJSON() {
+        let json = #"{"id": "PL1", "title": "목록", "_type": "playlist", "entries": []}"#
+        #expect(throws: EngineError.playlistNotSupported) {
+            try JSONDecoder().decode(VideoMetadata.self, from: Data(json.utf8))
+        }
     }
 }
 
@@ -178,6 +214,8 @@ struct FileNamingTests {
         ("", "오디오"),
         ("///", "---"),
         ("...", "오디오"),
+        (". .숨김", "숨김"),  // 점과 공백이 섞여도 숨김 파일이 되지 않는다
+        (" . . ", "오디오"),
     ])
     func sanitizes(_ title: String, _ expected: String) {
         #expect(FileNaming.sanitize(title) == expected)

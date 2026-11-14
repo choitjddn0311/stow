@@ -33,6 +33,8 @@ enum EngineError: Error, Equatable, Sendable {
     case diskFull
     /// 저장 위치에 쓸 권한이 없다.
     case permissionDenied
+    /// 저장 폴더가 없다(삭제되었거나 외장 디스크가 분리됨).
+    case outputDirectoryMissing
 
     // 엔진
     /// 앱 번들에 엔진 구성 요소가 없거나 실행할 수 없다.
@@ -78,6 +80,8 @@ extension EngineError: LocalizedError {
             "저장 공간이 부족합니다."
         case .permissionDenied:
             "저장 위치에 파일을 쓸 권한이 없습니다. 다른 폴더를 선택해 주세요."
+        case .outputDirectoryMissing:
+            "저장 폴더를 찾을 수 없습니다. 폴더가 삭제되었거나 디스크가 분리되었는지 확인해 주세요."
         case .missingComponent(let name):
             "추출 엔진 구성 요소(\(name))를 찾을 수 없습니다. 앱을 다시 설치해 주세요."
         case .launchFailed(let executable, let code):
@@ -96,6 +100,8 @@ extension EngineError: LocalizedError {
 
 /// yt-dlp 오류 출력(stderr의 `ERROR:` 줄)을 `EngineError`로 분류한다.
 /// 문구는 yt-dlp 버전에 따라 바뀔 수 있으므로, 분류하지 못하면 `.unknown`에 원문을 남긴다.
+/// 경고(`WARNING:`)·진행률 줄은 원인이 아니므로 분류에 쓰지 않는다. `ERROR:` 줄이 없으면
+/// (강제 종료, Python 예외 등) 마지막 몇 줄을 `.unknown`에 남긴다.
 enum YtDlpErrorMapper {
     /// 앞에서부터 처음 맞는 규칙을 쓴다. 더 구체적인 규칙을 앞에 둔다.
     private static let rules: [(patterns: [String], error: EngineError)] = [
@@ -103,7 +109,12 @@ enum YtDlpErrorMapper {
         (["Permission denied", "Operation not permitted", "Read-only file system"], .permissionDenied),
         (["Private video"], .privateVideo),
         (["confirm your age", "age-restricted", "inappropriate for some users"], .ageRestricted),
-        (["not a bot"], .blockedByYouTube),
+        // 403·429와 "This content isn't available"은 유튜브의 요청 제한·차단이다.
+        // 네트워크·삭제 영상 규칙("Unable to download", "Video unavailable")보다 앞에 둔다.
+        ([
+            "not a bot", "HTTP Error 429", "Too Many Requests", "HTTP Error 403",
+            "content isn't available", "content isn\u{2019}t available",
+        ], .blockedByYouTube),
         (["members-only", "Join this channel", "requires payment", "Sign in to"], .loginRequired),
         (["live event will begin", "Premieres in", "This live event"], .liveNotSupported),
         (["Unsupported URL"], .unsupportedURL),
@@ -123,7 +134,11 @@ enum YtDlpErrorMapper {
 
     static func map(stderr lines: [String]) -> EngineError {
         let errors = lines.filter { $0.hasPrefix("ERROR:") }
-        let message = (errors.isEmpty ? lines : errors).joined(separator: "\n")
+        guard !errors.isEmpty else {
+            let tail = lines.filter { !$0.hasPrefix("[stow:") && !$0.hasPrefix("WARNING:") }.suffix(10)
+            return .unknown(tail.joined(separator: "\n"))
+        }
+        let message = errors.joined(separator: "\n")
         for rule in rules where rule.patterns.contains(where: { message.localizedCaseInsensitiveContains($0) }) {
             return rule.error
         }

@@ -74,12 +74,51 @@ struct YtDlpClientOfflineTests {
         defer { fixture.cleanUp() }
         let client = YtDlpClient(engine: engine, additionalArguments: ["--enable-file-urls"])
         let missing = fixture.sourceURL.deletingLastPathComponent().appending(path: "없는 파일.wav")
-        await #expect(throws: EngineError.self) {
+        // 로컬 파일이 없으면 yt-dlp는 "Unable to download webpage: [Errno 2] ..."를 낸다.
+        await #expect(throws: EngineError.network) {
             try await client.extract(
                 missing, options: ExtractOptions(format: .wav, outputDirectory: fixture.outputDirectory), fileName: "x"
             )
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.outputDirectory.path).isEmpty)
+    }
+
+    /// 변환 중에 취소하면 프로세스가 끝난 뒤 작업 폴더를 지우고, 저장 위치에는 아무것도 남기지 않는다.
+    @Test func cancellationCleansUpWorkDirectory() async throws {
+        let fixture = try TestFixture(seconds: 600)  // 10분: 변환이 취소 전에 끝나지 않을 만큼 길게
+        defer { fixture.cleanUp() }
+        var client = YtDlpClient(engine: engine, additionalArguments: ["--enable-file-urls"])
+        client.workDirectoryRoot = fixture.workRoot
+        let (converting, convertingContinuation) = AsyncStream<Void>.makeStream()
+
+        let task = Task {
+            try await client.extract(
+                fixture.sourceURL,
+                options: ExtractOptions(format: .flac, outputDirectory: fixture.outputDirectory),
+                fileName: "취소",
+                progress: { if $0 == .converting { convertingContinuation.yield() } }
+            )
+        }
+        for await _ in converting { break }
+        task.cancel()
+
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.workRoot.path).isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.outputDirectory.path).isEmpty)
+    }
+
+    @Test func missingOutputDirectoryIsReported() async throws {
+        let fixture = try TestFixture()
+        defer { fixture.cleanUp() }
+        var client = YtDlpClient(engine: engine, additionalArguments: ["--enable-file-urls"])
+        client.workDirectoryRoot = fixture.workRoot
+        let gone = fixture.root.appending(path: "삭제된 폴더")
+        await #expect(throws: EngineError.outputDirectoryMissing) {
+            try await client.extract(
+                fixture.sourceURL, options: ExtractOptions(format: .wav, outputDirectory: gone), fileName: "x"
+            )
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.workRoot.path).isEmpty)
     }
 }
 
@@ -125,18 +164,21 @@ struct YtDlpClientNetworkTests {
 
 // MARK: - 도우미
 
-/// 3초짜리 스테레오 WAV(`tone source.wav`)와 빈 저장 폴더를 만든다.
+/// 스테레오 WAV(`tone source.wav`, 기본 3초)와 빈 저장 폴더(`out`), 작업 폴더 위치(`work`)를 만든다.
 private struct TestFixture {
     let root: URL
     let sourceURL: URL
     let outputDirectory: URL
+    let workRoot: URL
 
-    init() throws {
+    init(seconds: Int = 3) throws {
         root = FileManager.default.temporaryDirectory.appending(path: "stow-test-\(UUID().uuidString)")
         outputDirectory = root.appending(path: "out")
+        workRoot = root.appending(path: "work")
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: workRoot, withIntermediateDirectories: true)
         sourceURL = root.appending(path: "tone source.wav")
-        try Self.makeWAV(seconds: 3).write(to: sourceURL)
+        try Self.makeWAV(seconds: seconds).write(to: sourceURL)
     }
 
     func cleanUp() {
@@ -144,12 +186,14 @@ private struct TestFixture {
     }
 
     private static func makeWAV(seconds: Int, sampleRate: Int = 44100) -> Data {
-        let frames = seconds * sampleRate
-        var samples = Data(capacity: frames * 4)
-        for i in 0..<frames {
+        // 440Hz는 44100 프레임에 정수 주기로 맞으므로 1초 분량을 반복해도 이어진다.
+        var second = Data(capacity: sampleRate * 4)
+        for i in 0..<sampleRate {
             let value = Int16(8000 * sin(Double(i) * 2 * .pi * 440 / Double(sampleRate)))
-            withUnsafeBytes(of: value.littleEndian) { bytes in samples.append(contentsOf: Array(bytes) + Array(bytes)) }
+            withUnsafeBytes(of: value.littleEndian) { bytes in second.append(contentsOf: Array(bytes) + Array(bytes)) }
         }
+        var samples = Data(capacity: second.count * seconds)
+        for _ in 0..<seconds { samples.append(second) }
         var data = Data()
         func append<T: FixedWidthInteger>(_ value: T) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
         data.append(contentsOf: Array("RIFF".utf8)); append(UInt32(36 + samples.count))

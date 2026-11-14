@@ -42,15 +42,57 @@ struct ProcessRunner: Sendable {
     var terminationGracePeriod: Duration = .seconds(3)
 
     /// 프로세스를 시작하고 이벤트 스트림을 돌려준다.
-    /// 스트림 소비를 중단하면(작업 취소 포함) 프로세스 그룹을 종료한다.
+    /// 스트림 소비를 중단하면(작업 취소 포함) 프로세스 그룹을 종료한다(종료를 기다리지는 않는다).
     /// 시작에 실패하면 스트림이 `EngineError.launchFailed`로 끝난다.
     func events(
         _ executable: URL,
         arguments: [String] = [],
         environment: [String: String]? = nil
     ) -> AsyncThrowingStream<ProcessEvent, any Error> {
+        start(executable, arguments: arguments, environment: environment).stream
+    }
+
+    /// 프로세스를 끝까지 실행하며 출력 이벤트를 `onEvent`로 전달하고 종료 방식을 돌려준다.
+    /// 작업이 취소되면 프로세스 그룹을 종료하고, **프로세스가 실제로 끝난 뒤에** `CancellationError`를 던진다.
+    /// 그래서 호출한 쪽은 취소 뒤 바로 작업 파일을 정리해도 자식이 아직 쓰고 있을 걱정이 없다.
+    func run(
+        _ executable: URL,
+        arguments: [String] = [],
+        environment: [String: String]? = nil,
+        onEvent: @escaping @Sendable (ProcessEvent) -> Void
+    ) async throws -> ProcessTermination {
+        let (stream, terminate) = start(executable, arguments: arguments, environment: environment)
+        // 별도 작업에서 소비해, 호출한 작업이 취소되어도 프로세스가 끝날 때까지 읽는다.
+        let consumer = Task {
+            var termination: ProcessTermination?
+            for try await event in stream {
+                if case .terminated(let value) = event {
+                    termination = value
+                } else {
+                    onEvent(event)
+                }
+            }
+            return termination
+        }
+        let termination = try await withTaskCancellationHandler {
+            try await consumer.value
+        } onCancel: {
+            terminate()
+        }
+        try Task.checkCancellation()
+        guard let termination else { throw CancellationError() }
+        return termination
+    }
+
+    private func start(
+        _ executable: URL,
+        arguments: [String],
+        environment: [String: String]?
+    ) -> (stream: AsyncThrowingStream<ProcessEvent, any Error>, terminate: @Sendable () -> Void) {
         let grace = terminationGracePeriod
-        return AsyncThrowingStream { continuation in
+        // AsyncThrowingStream의 build 클로저는 init 안에서 바로 실행된다.
+        var spawnedGroup: ProcessGroup?
+        let stream = AsyncThrowingStream<ProcessEvent, any Error> { continuation in
             let child: SpawnedChild
             do {
                 child = try SpawnedChild.spawn(
@@ -64,6 +106,7 @@ struct ProcessRunner: Sendable {
             }
 
             let group = ProcessGroup(pgid: child.pid)
+            spawnedGroup = group
             continuation.onTermination = { reason in
                 if case .cancelled = reason {
                     group.terminate(grace: grace)
@@ -92,27 +135,22 @@ struct ProcessRunner: Sendable {
                 }
             }
         }
+        let group = spawnedGroup
+        return (stream, { group?.terminate(grace: grace) })
     }
 
-    /// 프로세스를 끝까지 실행하고 출력을 모아 돌려준다. 작업이 취소되면 프로세스를 종료하고
-    /// `CancellationError`를 던진다.
+    /// 프로세스를 끝까지 실행하고 출력을 모아 돌려준다. 작업이 취소되면 프로세스를 종료하고,
+    /// 끝난 뒤 `CancellationError`를 던진다.
     func run(
         _ executable: URL,
         arguments: [String] = [],
         environment: [String: String]? = nil
     ) async throws -> ProcessResult {
-        var stdout: [String] = []
-        var stderr: [String] = []
-        for try await event in events(executable, arguments: arguments, environment: environment) {
-            switch event {
-            case .stdout(let line): stdout.append(line)
-            case .stderr(let line): stderr.append(line)
-            case .terminated(let termination):
-                return ProcessResult(termination: termination, stdout: stdout, stderr: stderr)
-            }
-        }
-        // 종료 이벤트 없이 스트림이 끝나는 경우는 취소뿐이다.
-        throw CancellationError()
+        let output = OutputCollector()
+        let termination = try await run(
+            executable, arguments: arguments, environment: environment, onEvent: { output.append($0) }
+        )
+        return output.result(termination)
     }
 
     // MARK: - 내부 구현
@@ -237,6 +275,25 @@ private final class ProcessGroup: Sendable {
 
     private static func currentError() -> POSIXError {
         POSIXError(POSIXErrorCode(rawValue: errno) ?? .ECHILD)
+    }
+}
+
+/// 여러 스레드에서 오는 출력을 모은다.
+private final class OutputCollector: Sendable {
+    private let lines = OSAllocatedUnfairLock(initialState: (stdout: [String](), stderr: [String]()))
+
+    func append(_ event: ProcessEvent) {
+        lines.withLock { lines in
+            switch event {
+            case .stdout(let line): lines.stdout.append(line)
+            case .stderr(let line): lines.stderr.append(line)
+            case .terminated: break
+            }
+        }
+    }
+
+    func result(_ termination: ProcessTermination) -> ProcessResult {
+        lines.withLock { ProcessResult(termination: termination, stdout: $0.stdout, stderr: $0.stderr) }
     }
 }
 

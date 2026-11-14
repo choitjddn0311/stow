@@ -22,11 +22,11 @@
 - 파일 이름은 영상 제목, 충돌 시 ` (2)`처럼 번호를 붙이고 덮어쓰지 않는다(덮어쓰기 선택 등은 4단계에서 결정)
 
 ## 3단계에서 만든 파일
-- `Stow/Core/Models/`: `AudioFormat`(MP3 128/192/320, WAV, FLAC)·`ExtractOptions`, `VideoMetadata`(`-J` 해석), `YouTubeURL`(youtube.com·youtu.be와 하위 도메인, 스킴 없으면 https)
+- `Stow/Core/Models/`: `AudioFormat`(MP3 128/192/320, WAV, FLAC)·`ExtractOptions`, `VideoMetadata`(`-J` 해석), `YouTubeURL`(youtube.com·youtu.be와 하위 도메인, 스킴 없으면 https, 재생목록·채널 경로 거부)
 - `Stow/Core/Engine/YtDlpArguments.swift`: 공통 인자 `--ignore-config --no-playlist --color never --ffmpeg-location --js-runtimes deno:`, 추출 인자(`--embed-metadata`, `-P home:/temp:`, `-o %(id)s.%(ext)s`, 진행률·결과 경로 템플릿)
 - `Stow/Core/Engine/ProgressParser.swift`: `[stow:download]`, `[stow:postprocess]`, `[stow:file]` 표식 줄만 해석 → `ExtractProgress`(downloading/converting/embeddingMetadata). 다운로드 진행은 stdout, 후처리 진행은 stderr로 나온다
-- `Stow/Core/Engine/YtDlpClient.swift`: `fetchMetadata`(재생목록·라이브 거부), `extract`(임시 폴더 → 이동, 취소 시 `CancellationError`), `FileNaming.sanitize`(`/`·`:` → `-`, 제어 문자·앞 점 제거, 200바이트 제한)
-- `Stow/Core/Engine/EngineError.swift`: 사용자용 오류 21종과 한국어 문구, `YtDlpErrorMapper`(stderr `ERROR:` 줄 분류, 못 하면 `.unknown(원문)`)
+- `Stow/Core/Engine/YtDlpClient.swift`: `fetchMetadata`(재생목록·라이브 거부), `extract`(임시 폴더 → `renamex_np(RENAME_EXCL)`로 원자적 이동, 취소 시 프로세스 종료를 기다린 뒤 정리하고 `CancellationError`), `FileNaming.sanitize`(`/`·`:` → `-`, 제어 문자·앞 점 제거, 200바이트 제한)
+- `Stow/Core/Engine/EngineError.swift`: 사용자용 오류 22종과 한국어 문구, `YtDlpErrorMapper`(stderr `ERROR:` 줄만 분류, 403·429는 유튜브 차단, 못 하면 `.unknown(원문)`)
 - `EngineLocator.ytDlpCommand`: `python3 -I -B -X utf8 yt-dlp ...`(Finder 실행 시 로케일과 무관하게 UTF-8)
 - `scripts/build-ffmpeg.sh`: `ffmetadata` 디먹서 추가(챕터 삽입용)
 - 테스트: `StowTests/ExtractCoreTests.swift`(URL·진행률·오류 매핑·메타데이터·인자·파일명), `StowTests/YtDlpClientTests.swift`(로컬 WAV를 `file://`로 넘기는 오프라인 E2E, 네트워크 테스트)
@@ -49,12 +49,15 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 ```
 
 ## 테스트 결과 (2026-11-14, 로컬)
-- Debug `test`: 44개 통과(매개변수 테스트는 1개로 셈), 네트워크 테스트 1개는 건너뜀
+- Debug `test`: 49개 통과(매개변수 테스트는 1개로 셈), 네트워크 테스트 1개는 건너뜀
   - 오프라인 E2E: MP3 320/128, WAV, FLAC 각각 변환·메타데이터·이동·Core Audio 디코딩 확인, 충돌 시 `(2)`·`(3)`, 실패 시 저장 위치에 파일 없음
+  - 취소: 10분 WAV를 FLAC으로 변환하는 중 취소 → `CancellationError`, 프로세스 종료 후 작업 폴더 삭제, 저장 위치 비어 있음
+  - 저장 폴더가 없으면 `.outputDirectoryMissing`
 - 네트워크 테스트(사용자 제공 URL `https://www.youtube.com/watch?v=B5cvbwOmfY0`, "Heya" 325초): 통과(33초)
   - MP3 320,076bps, WAV pcm_s16le, FLAC — 모두 48kHz 스테레오, 길이 325.0초, 제목·아티스트·날짜 태그 있음, Core Audio로 끝까지 디코딩됨
   - yt-dlp가 번들 deno로 유튜브 JS 챌린지 처리 확인(`-v`: `Solving JS challenges using deno`), 경고 없음
   - 사람이 직접 듣는 확인은 사용자에게 요청(결과 파일은 세션 임시 폴더에 있었음)
+  - 코드 리뷰 반영 후 재실행: 첫 시도는 추출 단계에서 유튜브 HTTP 403으로 실패(`.blockedByYouTube`로 분류됨, 짧은 시간에 같은 영상을 반복 요청한 영향으로 추정), 바로 다시 실행해 통과
 
 ## 확인된 개발 환경
 - macOS 26.6.2(arm64), Xcode 27.2, Swift 6.4.2, git 2.54, Homebrew
@@ -67,6 +70,7 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 ## 미해결 문제 / 주의
 - xcodebuild 실행 시 `DVTCoreDeviceCore` 플러그인 로드 실패, `CoreSimulator is out of date` 경고가 나옴. macOS 빌드와 테스트에는 영향 없음(미확인 해결책: `xcodebuild -runFirstLaunch`)
 - Developer ID 서명에서 Python 확장 모듈 로드와 공증은 아직 확인하지 않음 → 5단계에서 확인
+- 유튜브가 일시적으로 403을 줄 수 있다(3단계에서 1회 관찰). 4단계에서 `.blockedByYouTube`일 때 "다시 시도"를 제공할지 결정
 - `YtDlpErrorMapper` 문구 규칙은 yt-dlp 문구에 의존한다. 엔진을 올릴 때 4단계 수동 시나리오(비공개·연령 제한·네트워크 끊김)로 다시 확인
 - 비공개·연령 제한·네트워크 끊김 오류는 실제 영상으로 확인하지 않았다(단위 테스트로 문구만 확인) → 4단계 수동 시나리오에서 확인
 - WAV는 원본(유튜브 opus/AAC, 보통 48kHz)을 16비트로 저장한다. 샘플레이트·비트 깊이 옵션은 미정(PROJECT.md 8장)

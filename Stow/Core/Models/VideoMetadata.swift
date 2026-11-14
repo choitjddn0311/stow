@@ -18,10 +18,15 @@ extension VideoMetadata: Decodable {
         case id, title, duration, thumbnail, uploader, channel
         case webpageURL = "webpage_url"
         case liveStatus = "live_status"
+        case type = "_type"
     }
 
+    /// 재생목록·채널(`_type`이 `playlist` 등)이면 `EngineError.playlistNotSupported`를 던진다.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let type = try container.decodeIfPresent(String.self, forKey: .type), type != "video" {
+            throw EngineError.playlistNotSupported
+        }
         id = try container.decode(String.self, forKey: .id)
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? id
         duration = try container.decodeIfPresent(Double.self, forKey: .duration)
