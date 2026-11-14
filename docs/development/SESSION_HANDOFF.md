@@ -26,7 +26,8 @@
 - 사용자 결정: 도입, 하루 한 번 확인 후 설치 여부를 묻는다(Sparkle 기본 창), appcast는 최신 릴리스 파일(`releases/latest/download/appcast.xml`). 설계는 PROJECT.md 5장
 - Sparkle 2.10.1(Swift Package, `Package.resolved` 고정, MIT·BSD·zlib), 메뉴 "업데이트 확인…", `Config/Stow-Info.plist`(SUFeedURL·SUPublicEDKey·자동 확인), 테스트 호스트에서는 시작 안 함
 - **EdDSA 서명키**: 2026-11-14 이 Mac의 로그인 키체인에 생성(계정 `io.github.choitjddn0311.stow`), 공개키 `fWCstUEQ1NVBOQvE4GJPWcnjxorWPKAGqZBRMVfEN0w=`. 개인키 백업은 사용자가 해야 함(잃으면 기존 사용자에게 업데이트 불가)
-- 발견·해결: ad-hoc 서명 + Hardened Runtime에서 라이브러리 검증이 Sparkle.framework 로드를 거부해 **Release 앱이 실행 즉시 종료**(Debug는 Hardened Runtime이 꺼져 있어 테스트·CI로 안 잡힘) → `Config/Stow.entitlements`에 `disable-library-validation`(5b에서 제거), `release.sh`에 앱 실제 실행 확인(5초) 추가
+- 발견·해결: ad-hoc 서명 + Hardened Runtime에서 라이브러리 검증이 Sparkle.framework 로드를 거부해 **Release 앱이 실행 즉시 종료**(프로젝트 설정은 Debug도 Hardened Runtime YES지만, Xcode가 ad-hoc 서명 Debug 빌드에서는 끈다 — 빌드 로그 "note: Disabling hardened runtime with ad-hoc codesigning", PROJECT.md 5장. 그래서 Debug 테스트·CI로는 안 잡힘) → `Config/Stow.entitlements`에 `disable-library-validation`(Release 설정에만, 5b에서 제거), `release.sh`에 앱 실제 실행 확인(5초) 추가
+- 코드 리뷰(PR #14) 반영: `--publish` 시 빌드 번호가 직전 태그보다 커야 함(같으면 Sparkle이 업데이트를 알리지 않음), 실행 확인은 `STOW_DISABLE_UPDATERS=1`로 업데이터를 끄고 실행, Sparkle 도구 경로 확인, `SURequireSignedFeed`·`SUVerifyUpdateBeforeExtraction`, "업데이트 확인…"은 확인 가능할 때만 활성(`CheckForUpdatesButton`), 변경 사항 HTML 변환(링크·번호 목록, 오류 숨기지 않음), 엔타이틀먼트는 Release에만
 - `release.sh`: Sparkle.framework·SUPublicEDKey 확인, 키체인 공개키와 앱 공개키 일치 확인, DMG EdDSA 서명·검증, appcast.xml 생성(변경 사항을 간단한 HTML로)·xmllint·서명·검증, 릴리스에 appcast.xml 함께 업로드. 서명키가 없으면 `--publish` 거부
 - 로컬: Debug `test` 92개 통과, 런타임 이슈 0건. `release.sh`(올리지 않음)로 Release 빌드 → 실행 확인 → DMG → Sparkle 서명·appcast 생성·검증 통과
 - 아직 확인하지 않은 것: 실제 업데이트(옛 버전 앱이 새 버전을 찾아 받아 설치). 피드가 공개되어야 가능 → 0.3.0 공개 후 버전을 낮춘 로컬 빌드로 확인
