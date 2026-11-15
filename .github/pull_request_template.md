@@ -12,7 +12,3 @@
 - [ ] CI `build-test` 통과
 - [ ] Claude 코드 리뷰(/code-review) 결과 반영 — 코드 변경 PR만, 문서·CI만 변경 시 "생략"
 - [ ] 수동 확인 (해당 시):
-
-## 문서
-- [ ] `SESSION_HANDOFF.md` 갱신
-- [ ] 설계 변경 시 `PROJECT.md` 갱신

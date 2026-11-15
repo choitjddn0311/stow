@@ -12,9 +12,11 @@ xcuserdata/
 DerivedData/
 build/
 
-# 개인 작업 가이드 (프로젝트 외부 문서, 저장소에 포함하지 않음)
+# 개발용 문서·개인 작업 가이드 (로컬에만 두고 저장소에 포함하지 않음)
 00_NEW_PROJECT_GUIDE.md
 01_CONTEXT_GUIDE.md
+CLAUDE.md
+docs/development/
 
 # 앱 번들용 실행 파일 (scripts/로 받거나 빌드, 저장소에 포함하지 않음)
 /engine/
