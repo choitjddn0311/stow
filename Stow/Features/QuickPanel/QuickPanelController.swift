@@ -56,7 +56,11 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
 
     private func makePanel() -> QuickPanel {
         let panel = QuickPanel(
-            contentRect: NSRect(x: 0, y: 0, width: QuickPanelView.width, height: QuickPanelView.height),
+            contentRect: NSRect(
+                x: 0, y: 0,
+                width: QuickPanelView.width + Self.margin * 2,
+                height: QuickPanelView.height + Self.margin * 2
+            ),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
@@ -86,16 +90,32 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
         return panel
     }
 
+    /// 유리 둘레의 투명 여백(macOS 26). 유리 효과는 둥근 모양 바깥에 옅은 그림자를 스스로 그리는데,
+    /// 창이 유리와 같은 크기면 그 그림자가 창 사각형 경계에서 잘려 흐린 사각형으로 보인다.
+    /// 여백 안에서 그림자가 다 사라지게 둔다.
+    private static var margin: CGFloat {
+        if #available(macOS 26.0, *) { 40 } else { 0 }
+    }
+
     /// 둥근 배경. 창 그림자·윤곽은 창 콘텐츠의 모양을 따르므로, 배경을 AppKit 뷰로 두고 둥글게 잘라야
     /// 둥근 패널 바깥에 사각형 테두리가 생기지 않는다.
-    /// macOS 26+는 Liquid Glass(`NSGlassEffectView`), 그 전에는 반투명 재질을 둥글게 자른다.
+    /// macOS 26+는 Liquid Glass(`NSGlassEffectView`)를 투명 여백 안에 두고, 그 전에는 반투명 재질을 둥글게 자른다.
     private static func roundedBackground(containing content: NSView) -> NSView {
         let radius = QuickPanelView.cornerRadius
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             glass.cornerRadius = radius
             glass.contentView = content
-            return glass
+            let container = NSView()
+            glass.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(glass)
+            NSLayoutConstraint.activate([
+                glass.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: margin),
+                glass.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -margin),
+                glass.topAnchor.constraint(equalTo: container.topAnchor, constant: margin),
+                glass.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -margin),
+            ])
+            return container
         }
         let material = NSVisualEffectView()
         material.material = .popover
@@ -123,7 +143,8 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
         let visible = screen.visibleFrame
         let size = panel.frame.size
         let x = visible.midX - size.width / 2
-        let y = visible.maxY - visible.height * 0.2 - size.height
+        // 투명 여백을 빼고 보이는 패널이 이 높이에 오게 한다.
+        let y = visible.maxY - visible.height * 0.2 - size.height + Self.margin
         panel.setFrameOrigin(NSPoint(x: x.rounded(), y: y.rounded()))
     }
 }
