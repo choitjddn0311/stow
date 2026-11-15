@@ -29,6 +29,8 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
         // 투명 창의 그림자는 그려진 모양을 따라가므로, 화면을 그린 뒤 다시 계산한다.
         panel.invalidateShadow()
+        // SwiftUI가 처음 그린 뒤 한 번 더(처음 열 때는 위 시점에 아직 그려지지 않았다).
+        DispatchQueue.main.async { panel.invalidateShadow() }
         isPreparing = true
         Task {
             await model.prepareForPresentation()
@@ -59,10 +61,16 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: true
         )
-        // 창 자체는 투명하게 두고, 둥근 모양·유리 효과는 SwiftUI 화면이 그린다(Liquid Glass).
+        // 창 자체는 투명하게 두고, 둥근 배경은 콘텐츠 뷰가 그린다(`roundedBackground`).
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // macOS 26의 창 그림자는 둥근 유리 바깥에 사각형 윤곽을 남겨 끈다(유리 효과가 자체 테두리를 그린다).
+        // 그 전에는 둥글게 자른 재질을 따라 그림자가 둥글게 생긴다.
+        if #available(macOS 26.0, *) {
+            panel.hasShadow = false
+        } else {
+            panel.hasShadow = true
+        }
         panel.isMovableByWindowBackground = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
@@ -72,10 +80,40 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
         panel.title = "빠른 추출"
         let hostingView = NSHostingView(rootView: QuickPanelView(model: model))
         hostingView.sizingOptions = []
-        panel.contentView = hostingView
+        panel.contentView = Self.roundedBackground(containing: hostingView)
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.model.dismiss() }
         return panel
+    }
+
+    /// 둥근 배경. 창 그림자·윤곽은 창 콘텐츠의 모양을 따르므로, 배경을 AppKit 뷰로 두고 둥글게 잘라야
+    /// 둥근 패널 바깥에 사각형 테두리가 생기지 않는다.
+    /// macOS 26+는 Liquid Glass(`NSGlassEffectView`), 그 전에는 반투명 재질을 둥글게 자른다.
+    private static func roundedBackground(containing content: NSView) -> NSView {
+        let radius = QuickPanelView.cornerRadius
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = radius
+            glass.contentView = content
+            return glass
+        }
+        let material = NSVisualEffectView()
+        material.material = .popover
+        material.blendingMode = .behindWindow
+        material.state = .active
+        material.wantsLayer = true
+        material.layer?.cornerRadius = radius
+        material.layer?.cornerCurve = .continuous
+        material.layer?.masksToBounds = true
+        content.translatesAutoresizingMaskIntoConstraints = false
+        material.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            content.topAnchor.constraint(equalTo: material.topAnchor),
+            content.bottomAnchor.constraint(equalTo: material.bottomAnchor),
+        ])
+        return material
     }
 
     /// 마우스가 있는 화면의 위쪽 가운데(Spotlight와 비슷한 높이).

@@ -146,15 +146,17 @@ private struct ContentRow: View {
 }
 
 /// 패널 배경: macOS 26부터는 Liquid Glass(사용자 요청 2026-11-14), 그 전에는 반투명 재질.
+/// 둥근 배경 자체(유리·재질)는 `QuickPanelController`가 AppKit 뷰로 깐다(창 그림자가 둥근 모양을 따르도록).
+/// 여기서는 macOS 26 전의 가는 테두리만 그린다.
 private struct PanelBackground: ViewModifier {
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: QuickPanelView.cornerRadius, style: .continuous)
         if #available(macOS 26.0, *) {
-            content.glassEffect(.regular, in: shape)
-        } else {
             content
-                .background(.regularMaterial, in: shape)
-                .overlay { shape.strokeBorder(Color(nsColor: .separatorColor).opacity(0.6)) }
+        } else {
+            content.overlay {
+                RoundedRectangle(cornerRadius: QuickPanelView.cornerRadius, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.6))
+            }
         }
     }
 }
