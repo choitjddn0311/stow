@@ -8,11 +8,14 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
     private var panel: QuickPanel?
     /// 클립보드를 읽는 동안(확인창이 뜰 수 있음)은 초점을 잃어도 닫지 않는다.
     private var isPreparing = false
+    /// 폴더 선택 창이 떠 있는 동안도 초점을 잃지만 닫지 않는다.
+    private var isChoosingFolder = false
 
     init(model: QuickPanelModel) {
         self.model = model
         super.init()
         model.onClose = { [weak self] in self?.close() }
+        model.onChooseFolder = { [weak self] current in self?.chooseFolder(current: current) }
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -44,11 +47,23 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
         panel?.orderOut(nil)
     }
 
+    /// 폴더 선택 창을 패널 위에 띄운다. 패널은 비활성 패널이라 앱을 앞으로 가져와야 선택 창이 입력을 받는다.
+    private func chooseFolder(current: URL) -> URL? {
+        guard let panel, panel.isVisible else { return nil }
+        isChoosingFolder = true
+        defer {
+            isChoosingFolder = false
+            if panel.isVisible { panel.makeKey() }
+        }
+        NSApp.activate()
+        return OutputFolderPicker.choose(current: current, above: panel.level)
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
         // 바깥을 클릭하면 닫는다(Spotlight처럼).
-        guard !isPreparing, isVisible else { return }
+        guard !isPreparing, !isChoosingFolder, isVisible else { return }
         model.dismiss()
     }
 

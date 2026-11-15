@@ -442,6 +442,38 @@ struct AppSettingsTests {
         UserDefaults().removePersistentDomain(forName: suite)
     }
 
+    @Test func selectFormat() {
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        settings.select(.mp3(.kbps128))
+        #expect(settings.formatKind == .mp3)
+        #expect(settings.mp3Bitrate == .kbps128)
+        settings.select(.wav)
+        #expect(settings.format == .wav)
+        #expect(settings.mp3Bitrate == .kbps128)  // MP3 음질은 기억한다
+    }
+
+    /// 최근 저장 폴더: 지금 폴더가 맨 앞, 같은 폴더는 한 번, 최대 5개, 다시 실행해도 유지.
+    @Test func recentOutputDirectories() {
+        let suite = "stow-test-\(UUID().uuidString)"
+        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        #expect(settings.recentOutputDirectories.map(\.path) == [AppSettings.defaultOutputDirectory.path])
+
+        let folders = (1...6).map { URL(filePath: "/tmp/최근\($0)", directoryHint: .isDirectory) }
+        for folder in folders { settings.outputDirectory = folder }
+        #expect(settings.recentOutputDirectories.map(\.path) == ["/tmp/최근6", "/tmp/최근5", "/tmp/최근4", "/tmp/최근3", "/tmp/최근2"])
+
+        // 이미 있는 폴더(끝의 / 표기만 다름)를 다시 고르면 맨 앞으로 옮기고 중복하지 않는다.
+        settings.outputDirectory = URL(filePath: "/tmp/최근3/", directoryHint: .isDirectory)
+        #expect(settings.recentOutputDirectories.map { $0.path(percentEncoded: false) }.count == 5)
+        #expect(AppSettings.isSameDirectory(settings.recentOutputDirectories[0], folders[2]))
+        #expect(settings.recentOutputDirectories.filter { AppSettings.isSameDirectory($0, folders[2]) }.count == 1)
+
+        let reopened = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        #expect(reopened.recentOutputDirectories.count == 5)
+        #expect(AppSettings.isSameDirectory(reopened.recentOutputDirectories[0], folders[2]))
+        UserDefaults().removePersistentDomain(forName: suite)
+    }
+
     @Test func durationFormat() {
         #expect(DurationFormat.string(from: 5) == "0:05")
         #expect(DurationFormat.string(from: 325) == "5:25")

@@ -23,7 +23,11 @@ final class AppSettings {
         static let formatKind = "formatKind"
         static let mp3Bitrate = "mp3Bitrate"
         static let acceptedNoticeVersion = "acceptedNoticeVersion"
+        static let recentOutputDirectories = "recentOutputDirectories"
     }
+
+    /// 최근 저장 폴더를 몇 개까지 기억하는지(빠른 추출 패널의 폴더 메뉴)
+    static let maxRecentOutputDirectories = 5
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -32,8 +36,13 @@ final class AppSettings {
         didSet {
             defaults.set(outputDirectory.path, forKey: Keys.outputDirectory)
             outputFolderName = Self.folderName(for: outputDirectory)
+            recentOutputDirectories = Self.recents(adding: outputDirectory, to: recentOutputDirectories)
+            defaults.set(recentOutputDirectories.map(\.path), forKey: Keys.recentOutputDirectories)
         }
     }
+
+    /// 최근에 고른 저장 폴더(지금 폴더가 맨 앞, 최대 `maxRecentOutputDirectories`개)
+    private(set) var recentOutputDirectories: [URL]
 
     /// Finder에 보이는 저장 폴더 이름(예: "다운로드"). 화면을 그릴 때마다 파일 시스템을 조회하지 않도록
     /// 저장 위치가 바뀔 때만 계산해 둔다.
@@ -59,6 +68,9 @@ final class AppSettings {
             ?? Self.defaultOutputDirectory
         outputDirectory = directory
         outputFolderName = Self.folderName(for: directory)
+        let storedRecents = (defaults.stringArray(forKey: Keys.recentOutputDirectories) ?? [])
+            .map { URL(filePath: $0, directoryHint: .isDirectory) }
+        recentOutputDirectories = Self.recents(adding: directory, to: storedRecents)
         formatKind = defaults.string(forKey: Keys.formatKind).flatMap(AudioFormatKind.init(rawValue:)) ?? .mp3
         mp3Bitrate = MP3Bitrate(rawValue: defaults.integer(forKey: Keys.mp3Bitrate)) ?? .kbps320
         acceptedNoticeVersion = defaults.integer(forKey: Keys.acceptedNoticeVersion)
@@ -73,6 +85,32 @@ final class AppSettings {
         }
     }
 
+    /// 포맷을 한 번에 고른다(MP3면 음질도 함께 바뀐다).
+    func select(_ format: AudioFormat) {
+        switch format {
+        case .mp3(let bitrate):
+            mp3Bitrate = bitrate
+            formatKind = .mp3
+        case .wav: formatKind = .wav
+        case .flac: formatKind = .flac
+        }
+    }
+
+    /// 두 폴더가 같은 위치인지(끝의 `/` 등 표기 차이는 무시)
+    static func isSameDirectory(_ a: URL, _ b: URL) -> Bool {
+        a.standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
+            == b.standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
+    }
+
+    /// `directory`를 맨 앞에 두고 같은 폴더는 한 번만, 최대 개수까지 남긴다.
+    private static func recents(adding directory: URL, to list: [URL]) -> [URL] {
+        var result = [directory]
+        for url in list where !result.contains(where: { isSameDirectory($0, url) }) {
+            result.append(url)
+        }
+        return Array(result.prefix(maxRecentOutputDirectories))
+    }
+
     var extractOptions: ExtractOptions {
         ExtractOptions(format: format, outputDirectory: outputDirectory)
     }
@@ -84,5 +122,13 @@ final class AppSettings {
     static var defaultOutputDirectory: URL {
         FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
+    }
+}
+
+private extension String {
+    /// 끝의 `suffix`를 뗀다(루트 "/"는 그대로).
+    func trimmingSuffix(_ suffix: String) -> String {
+        guard count > suffix.count, hasSuffix(suffix) else { return self }
+        return String(dropLast(suffix.count))
     }
 }
