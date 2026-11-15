@@ -55,7 +55,7 @@ struct QuickPanelView: View {
                 Button("닫기") { model.dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .modifier(GlassButton(prominent: false))
-                Button(addButtonTitle) { model.submit() }
+                Button(extract.addButtonTitle) { model.submit() }
                     .modifier(GlassButton(prominent: true))
                     .disabled(!canSubmit)
             }
@@ -66,13 +66,6 @@ struct QuickPanelView: View {
         .frame(width: Self.width, height: Self.height)
         .modifier(PanelBackground())
         .onChange(of: model.presentationID, initial: true) { isFieldFocused = true }
-    }
-
-    private var addButtonTitle: String {
-        if case .playlist = extract.state, extract.pendingAddCount > 0 {
-            return "\(extract.pendingAddCount)개 대기열에 추가"
-        }
-        return "대기열에 추가"
     }
 
     private var canSubmit: Bool {

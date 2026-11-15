@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 추출 화면(디자인 A안 "시스템 설정형", Apple HIG 기준).
 /// 묶음 상자(grouped Form): "영상"(주소·불러온 영상) → "재생목록 영상"(재생목록일 때 고르기) → "출력" → "대기열".
-/// 아래 고정 바: 대기열 요약과 "대기열에 추가".
+/// 아래 고정 바: 대기열 요약과 추출(다른 영상이 추출 중이면 "대기열에 추가") 버튼.
 struct ExtractView: View {
     @Bindable var model: ExtractViewModel
     @Bindable var queue: ExtractQueue
@@ -113,7 +113,7 @@ struct ExtractView: View {
                 Button {
                     model.addToQueue()
                 } label: {
-                    Label(addTitle, systemImage: "plus.circle.fill")
+                    Label(model.addButtonTitle, systemImage: model.addButtonSymbol)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -123,13 +123,6 @@ struct ExtractView: View {
         }
     }
 
-    private var addTitle: String {
-        if case .playlist = model.state {
-            "선택한 \(model.pendingAddCount)개 추가"
-        } else {
-            "대기열에 추가"
-        }
-    }
 
     @ViewBuilder
     private var summary: some View {
