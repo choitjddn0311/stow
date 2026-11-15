@@ -34,6 +34,8 @@ final class AppSettings {
     /// 결과 파일을 저장할 폴더. 기본값은 "다운로드" 폴더.
     var outputDirectory: URL {
         didSet {
+            // 같은 폴더를 다시 고르면 저장·목록 갱신을 하지 않는다(화면을 다시 그리지 않게).
+            guard !Self.isSameDirectory(oldValue, outputDirectory) else { return }
             defaults.set(outputDirectory.path, forKey: Keys.outputDirectory)
             outputFolderName = Self.folderName(for: outputDirectory)
             recentOutputDirectories = Self.recents(adding: outputDirectory, to: recentOutputDirectories)
@@ -43,6 +45,19 @@ final class AppSettings {
 
     /// 최근에 고른 저장 폴더(지금 폴더가 맨 앞, 최대 `maxRecentOutputDirectories`개)
     private(set) var recentOutputDirectories: [URL]
+
+    /// 메뉴에 보일 최근 폴더: 지금 폴더와, 아직 있는 폴더만(지워졌거나 연결이 끊긴 볼륨은 뺀다).
+    var availableRecentOutputDirectories: [URL] {
+        recentOutputDirectories.filter { url in
+            Self.isSameDirectory(url, outputDirectory) || Self.directoryExists(url)
+        }
+    }
+
+    static func directoryExists(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false), isDirectory: &isDirectory)
+            && isDirectory.boolValue
+    }
 
     /// Finder에 보이는 저장 폴더 이름(예: "다운로드"). 화면을 그릴 때마다 파일 시스템을 조회하지 않도록
     /// 저장 위치가 바뀔 때만 계산해 둔다.
@@ -96,10 +111,13 @@ final class AppSettings {
         }
     }
 
-    /// 두 폴더가 같은 위치인지(끝의 `/` 등 표기 차이는 무시)
+    /// 두 폴더가 같은 위치인지(끝의 `/`, 심볼릭 링크 등 표기 차이는 무시. 예: /tmp와 /private/tmp)
     static func isSameDirectory(_ a: URL, _ b: URL) -> Bool {
-        a.standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
-            == b.standardizedFileURL.path(percentEncoded: false).trimmingSuffix("/")
+        canonicalPath(a) == canonicalPath(b)
+    }
+
+    private static func canonicalPath(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false).trimmingSuffix("/")
     }
 
     /// `directory`를 맨 앞에 두고 같은 폴더는 한 번만, 최대 개수까지 남긴다.

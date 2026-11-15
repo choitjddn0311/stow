@@ -474,6 +474,36 @@ struct AppSettingsTests {
         UserDefaults().removePersistentDomain(forName: suite)
     }
 
+    /// 심볼릭 링크로 가리킨 같은 폴더는 같은 폴더로 본다(/tmp → /private/tmp).
+    @Test func sameDirectoryThroughSymlink() throws {
+        let name = "stow-same-\(UUID().uuidString)"
+        let dir = URL(filePath: "/private/tmp/\(name)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(AppSettings.isSameDirectory(URL(filePath: "/tmp/\(name)/"), dir))
+        #expect(!AppSettings.isSameDirectory(URL(filePath: "/tmp/\(name)"), URL(filePath: "/tmp/\(name)-other")))
+    }
+
+    /// 메뉴의 최근 폴더: 지금 폴더는 늘 보이고, 없어진 폴더는 뺀다.
+    @Test func availableRecentsSkipMissingFolders() throws {
+        let suite = "stow-test-\(UUID().uuidString)"
+        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let existing = FileManager.default.temporaryDirectory.appending(path: "stow-recent-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: existing) }
+        let missing = URL(filePath: "/tmp/stow-missing-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let missingCurrent = URL(filePath: "/tmp/stow-missing-current-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+        settings.outputDirectory = existing
+        settings.outputDirectory = missing
+        settings.outputDirectory = missingCurrent
+        let shown = settings.availableRecentOutputDirectories
+        #expect(shown.contains { AppSettings.isSameDirectory($0, missingCurrent) })  // 지금 폴더는 없어도 보인다
+        #expect(shown.contains { AppSettings.isSameDirectory($0, existing) })
+        #expect(!shown.contains { AppSettings.isSameDirectory($0, missing) })
+        UserDefaults().removePersistentDomain(forName: suite)
+    }
+
     @Test func durationFormat() {
         #expect(DurationFormat.string(from: 5) == "0:05")
         #expect(DurationFormat.string(from: 325) == "5:25")

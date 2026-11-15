@@ -60,7 +60,7 @@ struct QuickPanelModelTests {
         let extract = ExtractViewModel(settings: settings, engine: engine, queue: queue, autoFetchDelay: .seconds(60))
         let panel = QuickPanelModel(extract: extract, clipboard: clipboard)
         var closes = 0
-        panel.onClose = { closes += 1 }
+        panel.onClose = { _ in closes += 1 }
         return Fixture(panel: panel, queue: queue, engine: engine, clipboard: clipboard, closeCount: { closes })
     }
 
@@ -97,6 +97,16 @@ struct QuickPanelModelTests {
         f.panel.chooseOtherFolder()
         #expect(settings.outputDirectory == picked)
         #expect(f.closeCount() == 0)
+    }
+
+    /// 닫을 때 원래 앱으로 초점을 돌려줄지: 메인 창으로 넘길 때만 돌려주지 않는다.
+    @Test func returnFocusOnlyWhenNotOpeningMainWindow() {
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata))))
+        var flags: [Bool] = []
+        f.panel.onClose = { flags.append($0) }
+        f.panel.dismiss()
+        f.panel.openInMainWindow()
+        #expect(flags == [true, false])
     }
 
     @Test func clipboardYouTubeURLIsFilledAndFetched() async {

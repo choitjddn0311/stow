@@ -73,7 +73,9 @@ struct QuickPanelView: View {
 private struct FormatChip: View {
     let model: QuickPanelModel
 
-    private static let formats: [AudioFormat] = [.mp3(.kbps320), .mp3(.kbps192), .mp3(.kbps128), .wav, .flac]
+    /// MP3는 높은 음질부터, 그다음 무손실 포맷
+    private static let formats: [AudioFormat] =
+        MP3Bitrate.allCases.sorted { $0.rawValue > $1.rawValue }.map { .mp3($0) } + [.wav, .flac]
 
     var body: some View {
         let current = model.extract.settings.format
@@ -101,7 +103,7 @@ private struct FolderChip: View {
     var body: some View {
         let settings = model.extract.settings
         Menu {
-            ForEach(settings.recentOutputDirectories, id: \.self) { url in
+            ForEach(settings.availableRecentOutputDirectories, id: \.self) { url in
                 Toggle(DisplayPath.abbreviated(url), isOn: Binding(
                     get: { AppSettings.isSameDirectory(url, settings.outputDirectory) },
                     set: { if $0 { model.selectOutputDirectory(url) } }
@@ -110,6 +112,7 @@ private struct FolderChip: View {
             Divider()
             Button("다른 폴더…") { model.chooseOtherFolder() }
             Button("Finder에서 열기") { NSWorkspace.shared.open(settings.outputDirectory) }
+                .disabled(!AppSettings.directoryExists(settings.outputDirectory))
         } label: {
             Label(settings.outputFolderName, systemImage: "folder")
         }
