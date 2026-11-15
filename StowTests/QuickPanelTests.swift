@@ -60,8 +60,53 @@ struct QuickPanelModelTests {
         let extract = ExtractViewModel(settings: settings, engine: engine, queue: queue, autoFetchDelay: .seconds(60))
         let panel = QuickPanelModel(extract: extract, clipboard: clipboard)
         var closes = 0
-        panel.onClose = { closes += 1 }
+        panel.onClose = { _ in closes += 1 }
         return Fixture(panel: panel, queue: queue, engine: engine, clipboard: clipboard, closeCount: { closes })
+    }
+
+    /// 포맷·폴더 칩: 바꾼 값이 메인 창과 같은 설정에 남는다.
+    @Test func chipsChangeSharedSettings() {
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata))))
+        let settings = f.panel.extract.settings
+
+        f.panel.select(.mp3(.kbps192))
+        #expect(settings.format == .mp3(.kbps192))
+        f.panel.select(.flac)
+        #expect(settings.format == .flac)
+        #expect(f.panel.extract.addButtonTitle.contains("FLAC"))
+
+        let other = URL(filePath: "/tmp/stow-panel-other", directoryHint: .isDirectory)
+        f.panel.selectOutputDirectory(other)
+        #expect(settings.outputDirectory == other)
+        #expect(f.closeCount() == 0)  // 설정을 바꿔도 패널은 닫히지 않는다
+    }
+
+    /// "다른 폴더…": 고르면 설정에 반영, 취소하면 그대로.
+    @Test func chooseOtherFolder() {
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata))))
+        let settings = f.panel.extract.settings
+        let picked = URL(filePath: "/tmp/stow-panel-picked", directoryHint: .isDirectory)
+        var offered: URL?
+
+        f.panel.onChooseFolder = { current in offered = current; return nil }
+        f.panel.chooseOtherFolder()
+        #expect(offered == panelOutputDirectory)  // 지금 폴더에서 시작한다
+        #expect(settings.outputDirectory == panelOutputDirectory)
+
+        f.panel.onChooseFolder = { _ in picked }
+        f.panel.chooseOtherFolder()
+        #expect(settings.outputDirectory == picked)
+        #expect(f.closeCount() == 0)
+    }
+
+    /// 닫을 때 원래 앱으로 초점을 돌려줄지: 메인 창으로 넘길 때만 돌려주지 않는다.
+    @Test func returnFocusOnlyWhenNotOpeningMainWindow() {
+        let f = makePanel(engine: FakeEngine(media: .success(.video(panelMetadata))))
+        var flags: [Bool] = []
+        f.panel.onClose = { flags.append($0) }
+        f.panel.dismiss()
+        f.panel.openInMainWindow()
+        #expect(flags == [true, false])
     }
 
     @Test func clipboardYouTubeURLIsFilledAndFetched() async {

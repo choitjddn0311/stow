@@ -25,9 +25,12 @@ final class QuickPanelModel {
     private(set) var isPresented = false
 
     /// 패널을 닫아 달라는 요청(컨트롤러가 연결한다)
-    @ObservationIgnored var onClose: () -> Void = {}
+    /// `returnFocus`: 닫은 뒤 원래 쓰던 앱으로 초점을 돌려줄지(메인 창을 열 때는 false)
+    @ObservationIgnored var onClose: (_ returnFocus: Bool) -> Void = { _ in }
     /// 주소(와 이미 불러온 재생목록)를 메인 창에서 열어 달라는 요청
     @ObservationIgnored var onOpenInMainWindow: (String, Playlist?) -> Void = { _, _ in }
+    /// 폴더 선택 창을 띄워 달라는 요청(컨트롤러가 연결한다). 고른 폴더를 돌려준다.
+    @ObservationIgnored var onChooseFolder: (URL) -> URL? = { _ in nil }
 
     @ObservationIgnored private let clipboard: any ClipboardReading
     /// 이번에 클립보드에서 채운 주소와 그때의 클립보드 번호
@@ -83,16 +86,33 @@ final class QuickPanelModel {
     func openInMainWindow() {
         let text = extract.urlText
         let playlist: Playlist? = if case .playlist(let playlist) = extract.state { playlist } else { nil }
-        dismiss()
+        dismiss(returnFocus: false)
         onOpenInMainWindow(text, playlist)
     }
 
+    /// 포맷 칩 메뉴. 바꾼 값은 메인 창 기본 설정에도 남는다.
+    func select(_ format: AudioFormat) {
+        extract.settings.select(format)
+    }
+
+    /// 폴더 칩 메뉴의 최근 폴더.
+    func selectOutputDirectory(_ url: URL) {
+        extract.settings.outputDirectory = url
+    }
+
+    /// 폴더 칩 메뉴의 "다른 폴더…". 선택 창이 떠 있는 동안 패널은 닫히지 않는다.
+    func chooseOtherFolder() {
+        if let url = onChooseFolder(extract.settings.outputDirectory) {
+            extract.settings.outputDirectory = url
+        }
+    }
+
     /// Esc·바깥 클릭: 조회를 멈추고 닫는다.
-    func dismiss() {
+    func dismiss(returnFocus: Bool = true) {
         isPresented = false
         cancelPendingAdd()
         extract.cancelFetch()
-        onClose()
+        onClose(returnFocus)
     }
 
     /// 테스트에서 Return 뒤 추가가 끝날 때까지 기다린다.
@@ -137,6 +157,6 @@ final class QuickPanelModel {
         }
         extract.addToQueue()
         isPresented = false
-        onClose()
+        onClose(true)
     }
 }

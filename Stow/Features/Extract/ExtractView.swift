@@ -509,15 +509,7 @@ private struct OutputSection: View {
     }
 
     private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = settings.outputDirectory
-        panel.prompt = "선택"
-        panel.message = "추출한 파일을 저장할 폴더를 선택하세요."
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = OutputFolderPicker.choose(current: settings.outputDirectory) {
             settings.outputDirectory = url
         }
     }

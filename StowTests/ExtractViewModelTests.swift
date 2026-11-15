@@ -442,6 +442,68 @@ struct AppSettingsTests {
         UserDefaults().removePersistentDomain(forName: suite)
     }
 
+    @Test func selectFormat() {
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        settings.select(.mp3(.kbps128))
+        #expect(settings.formatKind == .mp3)
+        #expect(settings.mp3Bitrate == .kbps128)
+        settings.select(.wav)
+        #expect(settings.format == .wav)
+        #expect(settings.mp3Bitrate == .kbps128)  // MP3 음질은 기억한다
+    }
+
+    /// 최근 저장 폴더: 지금 폴더가 맨 앞, 같은 폴더는 한 번, 최대 5개, 다시 실행해도 유지.
+    @Test func recentOutputDirectories() {
+        let suite = "stow-test-\(UUID().uuidString)"
+        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        #expect(settings.recentOutputDirectories.map(\.path) == [AppSettings.defaultOutputDirectory.path])
+
+        let folders = (1...6).map { URL(filePath: "/tmp/최근\($0)", directoryHint: .isDirectory) }
+        for folder in folders { settings.outputDirectory = folder }
+        #expect(settings.recentOutputDirectories.map(\.path) == ["/tmp/최근6", "/tmp/최근5", "/tmp/최근4", "/tmp/최근3", "/tmp/최근2"])
+
+        // 이미 있는 폴더(끝의 / 표기만 다름)를 다시 고르면 맨 앞으로 옮기고 중복하지 않는다.
+        settings.outputDirectory = URL(filePath: "/tmp/최근3/", directoryHint: .isDirectory)
+        #expect(settings.recentOutputDirectories.map { $0.path(percentEncoded: false) }.count == 5)
+        #expect(AppSettings.isSameDirectory(settings.recentOutputDirectories[0], folders[2]))
+        #expect(settings.recentOutputDirectories.filter { AppSettings.isSameDirectory($0, folders[2]) }.count == 1)
+
+        let reopened = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        #expect(reopened.recentOutputDirectories.count == 5)
+        #expect(AppSettings.isSameDirectory(reopened.recentOutputDirectories[0], folders[2]))
+        UserDefaults().removePersistentDomain(forName: suite)
+    }
+
+    /// 심볼릭 링크로 가리킨 같은 폴더는 같은 폴더로 본다(/tmp → /private/tmp).
+    @Test func sameDirectoryThroughSymlink() throws {
+        let name = "stow-same-\(UUID().uuidString)"
+        let dir = URL(filePath: "/private/tmp/\(name)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(AppSettings.isSameDirectory(URL(filePath: "/tmp/\(name)/"), dir))
+        #expect(!AppSettings.isSameDirectory(URL(filePath: "/tmp/\(name)"), URL(filePath: "/tmp/\(name)-other")))
+    }
+
+    /// 메뉴의 최근 폴더: 지금 폴더는 늘 보이고, 없어진 폴더는 뺀다.
+    @Test func availableRecentsSkipMissingFolders() throws {
+        let suite = "stow-test-\(UUID().uuidString)"
+        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let existing = FileManager.default.temporaryDirectory.appending(path: "stow-recent-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: existing) }
+        let missing = URL(filePath: "/tmp/stow-missing-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let missingCurrent = URL(filePath: "/tmp/stow-missing-current-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+        settings.outputDirectory = existing
+        settings.outputDirectory = missing
+        settings.outputDirectory = missingCurrent
+        let shown = settings.availableRecentOutputDirectories
+        #expect(shown.contains { AppSettings.isSameDirectory($0, missingCurrent) })  // 지금 폴더는 없어도 보인다
+        #expect(shown.contains { AppSettings.isSameDirectory($0, existing) })
+        #expect(!shown.contains { AppSettings.isSameDirectory($0, missing) })
+        UserDefaults().removePersistentDomain(forName: suite)
+    }
+
     @Test func durationFormat() {
         #expect(DurationFormat.string(from: 5) == "0:05")
         #expect(DurationFormat.string(from: 325) == "5:25")

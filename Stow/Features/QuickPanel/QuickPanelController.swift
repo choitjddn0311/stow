@@ -8,11 +8,14 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
     private var panel: QuickPanel?
     /// 클립보드를 읽는 동안(확인창이 뜰 수 있음)은 초점을 잃어도 닫지 않는다.
     private var isPreparing = false
+    /// 폴더 선택 창이 떠 있는 동안도 초점을 잃지만 닫지 않는다.
+    private var isChoosingFolder = false
 
     init(model: QuickPanelModel) {
         self.model = model
         super.init()
-        model.onClose = { [weak self] in self?.close() }
+        model.onClose = { [weak self] returnFocus in self?.close(returnFocus: returnFocus) }
+        model.onChooseFolder = { [weak self] current in self?.chooseFolder(current: current) }
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -40,15 +43,49 @@ final class QuickPanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func close() {
+    private func close(returnFocus: Bool) {
         panel?.orderOut(nil)
+        // 폴더 선택 때문에 Stow를 앞으로 가져왔다면, 닫을 때 원래 쓰던 앱으로 돌려준다.
+        let app = appToRestore
+        appToRestore = nil
+        if returnFocus { app?.activate() }
+    }
+
+    /// "다른 폴더…" 때문에 Stow를 앞으로 가져오기 전에 쓰던 앱
+    private var appToRestore: NSRunningApplication?
+
+    /// 폴더 선택 창을 패널 위에 띄운다. 패널은 비활성 패널이라 앱을 앞으로 가져와야 선택 창이 입력을 받는다.
+    private func chooseFolder(current: URL) -> URL? {
+        guard let panel, panel.isVisible else { return nil }
+        if appToRestore == nil,
+           let front = NSWorkspace.shared.frontmostApplication,
+           front != NSRunningApplication.current {
+            appToRestore = front
+        }
+        isChoosingFolder = true
+        defer {
+            isChoosingFolder = false
+            refocus(panel)
+        }
+        NSApp.activate()
+        return OutputFolderPicker.choose(current: current, above: panel.level)
+    }
+
+    /// 선택 창이 닫힌 뒤 패널이 다시 키 창이 되게 한다. 다른 창(메인 창 등)이 먼저 키를 가져가면
+    /// 바깥 클릭으로 닫히지 않으므로, 다음 이벤트 처리 뒤에도 한 번 더 확인한다.
+    private func refocus(_ panel: QuickPanel) {
+        guard panel.isVisible else { return }
+        panel.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async {
+            if panel.isVisible, !panel.isKeyWindow { panel.makeKeyAndOrderFront(nil) }
+        }
     }
 
     // MARK: - NSWindowDelegate
 
     func windowDidResignKey(_ notification: Notification) {
         // 바깥을 클릭하면 닫는다(Spotlight처럼).
-        guard !isPreparing, isVisible else { return }
+        guard !isPreparing, !isChoosingFolder, isVisible else { return }
         model.dismiss()
     }
 

@@ -40,17 +40,9 @@ struct QuickPanelView: View {
 
             Divider().padding(.horizontal, 18)
 
-            HStack(spacing: 10) {
-                Label {
-                    Text("\(extract.settings.format.displayName) · \(DisplayPath.abbreviated(extract.settings.outputDirectory))")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                } icon: {
-                    Image(systemName: "folder")
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .help("포맷·저장 위치는 메인 창에서 바꿀 수 있습니다.")
+            HStack(spacing: 8) {
+                FormatChip(model: model)
+                FolderChip(model: model)
                 Spacer(minLength: 8)
                 Button("닫기") { model.dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -73,6 +65,75 @@ struct QuickPanelView: View {
         case .video, .playlist: extract.canAddToQueue
         case .fetching: !model.addWhenReady
         case .idle, .failed: extract.canFetch
+        }
+    }
+}
+
+/// 포맷 칩: 누르면 포맷 메뉴. 바꾼 값은 메인 창 기본 설정에도 남는다.
+private struct FormatChip: View {
+    let model: QuickPanelModel
+
+    /// MP3는 높은 음질부터, 그다음 무손실 포맷
+    private static let formats: [AudioFormat] =
+        MP3Bitrate.allCases.sorted { $0.rawValue > $1.rawValue }.map { .mp3($0) } + [.wav, .flac]
+
+    var body: some View {
+        let current = model.extract.settings.format
+        Menu {
+            ForEach(Self.formats, id: \.self) { format in
+                if format == .wav { Divider() }
+                Toggle(format.displayName, isOn: Binding(
+                    get: { current == format },
+                    set: { if $0 { model.select(format) } }
+                ))
+            }
+        } label: {
+            Label(current.displayName, systemImage: "music.note")
+        }
+        .modifier(ChipStyle())
+        .help("포맷")
+        .accessibilityLabel("포맷: \(current.displayName)")
+    }
+}
+
+/// 폴더 칩: 누르면 최근 저장 폴더·다른 폴더…·Finder에서 열기 메뉴.
+private struct FolderChip: View {
+    let model: QuickPanelModel
+
+    var body: some View {
+        let settings = model.extract.settings
+        Menu {
+            ForEach(settings.availableRecentOutputDirectories, id: \.self) { url in
+                Toggle(DisplayPath.abbreviated(url), isOn: Binding(
+                    get: { AppSettings.isSameDirectory(url, settings.outputDirectory) },
+                    set: { if $0 { model.selectOutputDirectory(url) } }
+                ))
+            }
+            Divider()
+            Button("다른 폴더…") { model.chooseOtherFolder() }
+            Button("Finder에서 열기") { NSWorkspace.shared.open(settings.outputDirectory) }
+                .disabled(!AppSettings.directoryExists(settings.outputDirectory))
+        } label: {
+            Label(settings.outputFolderName, systemImage: "folder")
+        }
+        .modifier(ChipStyle())
+        .frame(maxWidth: 200, alignment: .leading)
+        .help(settings.outputDirectory.path)
+        .accessibilityLabel("저장 위치: \(settings.outputFolderName)")
+    }
+}
+
+/// 칩 모양 메뉴 버튼: macOS 26부터는 Liquid Glass 버튼, 그 전에는 테두리 버튼.
+private struct ChipStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        let menu = content
+            .menuStyle(.button)
+            .menuIndicator(.visible)
+            .fixedSize(horizontal: false, vertical: true)
+        if #available(macOS 26.0, *) {
+            menu.buttonStyle(.glass)
+        } else {
+            menu.buttonStyle(.bordered)
         }
     }
 }
