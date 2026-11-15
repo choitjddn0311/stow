@@ -63,5 +63,3 @@ scripts/build-ffmpeg.sh     # FFmpeg + LAME(LGPL) 빌드
 xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arch=arm64' test
 scripts/release.sh          # 배포용 DMG(build/release/)
 ```
-
-개발 문서는 [`docs/development/`](docs/development/)에 있습니다.
