@@ -11,37 +11,51 @@ ICONSET="$REPO_ROOT/Stow/Assets.xcassets/AppIcon.appiconset"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+OUT="$WORK/out"
+mkdir "$OUT"
 
 log "렌더러 컴파일"
 swiftc -O -o "$WORK/render-svg" "$REPO_ROOT/scripts/lib/render-svg.swift"
 
-# 포인트 크기, 배율 → 파일 이름과 픽셀 크기
-entries=()
-for size in 16 32 128 256 512; do
-  for scale in 1 2; do
-    if [[ $scale == 1 ]]; then
-      name="icon_${size}x${size}.png"
-    else
-      name="icon_${size}x${size}@2x.png"
-    fi
-    pixels=$((size * scale))
-    log "${name} (${pixels}px)"
-    "$WORK/render-svg" "$SVG" "$pixels" "$ICONSET/$name"
-    entries+=("    { \"filename\" : \"${name}\", \"idiom\" : \"mac\", \"scale\" : \"${scale}x\", \"size\" : \"${size}x${size}\" }")
-  done
+# 픽셀 크기마다 한 번만 그린다. 모두 성공한 뒤에만 아이콘 세트로 옮겨, 실패해도 섞이지 않게 한다.
+for pixels in 16 32 64 128 256 512 1024; do
+  log "${pixels}px"
+  "$WORK/render-svg" "$SVG" "$pixels" "$OUT/$pixels.png"
 done
 
-{
-  printf '{\n  "images" : [\n'
-  last=$((${#entries[@]} - 1))
-  for i in "${!entries[@]}"; do
-    if [[ $i -lt $last ]]; then
-      printf '%s,\n' "${entries[$i]}"
-    else
-      printf '%s\n' "${entries[$i]}"
-    fi
-  done
-  printf '  ],\n  "info" : {\n    "author" : "xcode",\n    "version" : 1\n  }\n}\n'
-} > "$ICONSET/Contents.json"
+# 파일 이름 → 픽셀 크기
+place() { cp "$OUT/$2.png" "$WORK/$1"; }
+place icon_16x16.png 16
+place icon_16x16@2x.png 32
+place icon_32x32.png 32
+place icon_32x32@2x.png 64
+place icon_128x128.png 128
+place icon_128x128@2x.png 256
+place icon_256x256.png 256
+place icon_256x256@2x.png 512
+place icon_512x512.png 512
+place icon_512x512@2x.png 1024
 
+cat > "$WORK/Contents.json" <<'JSON'
+{
+  "images" : [
+    { "filename" : "icon_16x16.png", "idiom" : "mac", "scale" : "1x", "size" : "16x16" },
+    { "filename" : "icon_16x16@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "16x16" },
+    { "filename" : "icon_32x32.png", "idiom" : "mac", "scale" : "1x", "size" : "32x32" },
+    { "filename" : "icon_32x32@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "32x32" },
+    { "filename" : "icon_128x128.png", "idiom" : "mac", "scale" : "1x", "size" : "128x128" },
+    { "filename" : "icon_128x128@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "128x128" },
+    { "filename" : "icon_256x256.png", "idiom" : "mac", "scale" : "1x", "size" : "256x256" },
+    { "filename" : "icon_256x256@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "256x256" },
+    { "filename" : "icon_512x512.png", "idiom" : "mac", "scale" : "1x", "size" : "512x512" },
+    { "filename" : "icon_512x512@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "512x512" }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
+JSON
+
+mv -f "$WORK"/icon_*.png "$WORK/Contents.json" "$ICONSET/"
 log "완료: $ICONSET"
