@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A1000000000000000000001F /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A1000000000000000000001E /* Sparkle */; };
+		A10000000000000000000022 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000021 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +45,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000000000000000000001F /* Sparkle in Frameworks */,
+				A10000000000000000000022 /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -97,6 +99,7 @@
 			name = Stow;
 			packageProductDependencies = (
 				A1000000000000000000001E /* Sparkle */,
+				A10000000000000000000021 /* KeyboardShortcuts */,
 			);
 			productName = Stow;
 			productReference = A10000000000000000000004 /* Stow.app */;
@@ -155,6 +158,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A1000000000000000000001D /* XCRemoteSwiftPackageReference "Sparkle" */,
+				A10000000000000000000020 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000003 /* Products */;
@@ -420,6 +424,14 @@
 				minimumVersion = 2.10.1;
 			};
 		};
+		A10000000000000000000020 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -427,6 +439,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A1000000000000000000001D /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		A10000000000000000000021 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000020 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -3,6 +3,7 @@
 **마지막 업데이트**: 2026-11-14
 
 ## 현재 상태
+- **글로벌 단축키 빠른 추출 패널 구현, PR 검증 중**(MVP 이후 5번, 브랜치 `feat/global-hotkey-panel`). 사용자 화면 점검 통과("잘 돼"), 패널은 사용자 요청으로 Liquid Glass(macOS 26+) 적용
 - **대기열·재생목록 완료**(MVP 이후 3번, PR #15 병합 2026-11-14, `ff65a7f`). CI `build-test` 통과, 코드 리뷰 8건 반영. Sparkle(PR #14)은 병합됐지만 **배포하지 않음**(사용자 지시) — 0.3.0은 이 기능까지 넣은 뒤 배포 예정
 - 로드맵 **4단계(UI·설정) 완료**: PR #6으로 병합(2026-11-14). MVP 기능(1~4단계) 완성.
 - **UI 다듬기 완료**: PR #7로 병합(2026-11-14). Apple HIG 기준 A안(시스템 설정형), 사용자 확인("좋아"). 다음은 5a 배포(개발자 계정 없이)
@@ -23,6 +24,20 @@
 | (MVP 이후 1) 앱 안 엔진 업데이트 | **완료** (2026-11-14, PR #11). v0.2.0으로 공개 |
 | (MVP 이후 2) 앱 자동 업데이트(Sparkle) | **완료** (2026-11-14, PR #14), 미배포 |
 | (MVP 이후 3) 대기열·재생목록 | 완료(PR #15) |
+| (MVP 이후 5) 글로벌 단축키 빠른 추출 패널 | 구현 완료, PR 검증 중 |
+
+## 글로벌 단축키 빠른 추출 패널 (2026-11-14, `feat/global-hotkey-panel`)
+- 결정(사용자 2026-11-14, PROJECT.md 2장 5번): 기본 ⌥⌘Y·설정 창에서 변경(KeyboardShortcuts 3.1.0, MIT, SPM), 클립보드 유튜브 주소 자동 입력·불러오기, 추가하면 패널 닫기, 창을 닫아도 메뉴 막대에 상주
+- 내가 정한 세부: 패널에서 재생목록은 받을 수 있는 영상 전체 추가(고르려면 "메인 창에서 고르기…"), 메인 창은 `Window` 하나(새 창 중복 방지), 이용 고지 동의 전에는 단축키가 메인 창을 연다
+- 파일: `Stow/Features/QuickPanel/`(`QuickPanelModel` 동작·`QuickPanelView` 화면·`QuickPanelController` 비활성 NSPanel·`ClipboardReader`), `Stow/Features/Settings/SettingsView.swift`(단축키 입력), `Stow/App/AppCoordinator.swift`(창·패널·메뉴 막대 연결), `Stow/App/MenuBarMenu.swift`, `Stow/Licenses/KeyboardShortcuts-LICENSE.txt`(앱 Resources에 들어감)
+- 클립보드: macOS 15.4+는 `detectedPatterns`로 내용을 읽지 않고 주소처럼 보이는지 먼저 확인 → 그때만 읽음(첫 읽기 확인창). 확인창이 뜨는 동안은 패널이 초점을 잃어도 닫지 않음. 대기열에 넣은 클립보드 번호(`changeCount`)는 다시 채우지 않음
+- 디자인: macOS 26+ `glassEffect`(모서리 24)·`.glass`/`.glassProminent` 버튼, 그 전은 `.regularMaterial`. 패널 창은 투명 borderless
+- 테스트: `QuickPanelModelTests`(12개)·`ClipboardURLTests`(2개). 로컬 Debug `test` 117개 통과, 런타임 이슈 0건
+- 주의: ⌥⌘Y는 Finder 훑어보기 슬라이드쇼와 겹침(Stow 실행 중엔 Stow가 우선). KeyboardShortcuts 제작자는 공개 앱에 기본 단축키를 두지 말라고 권하지만 사용자가 기본값을 선택
+- 코드 리뷰(PR #17) 10건 중 9건 반영: 종료 처리(`AppDelegate.queue`)·엔진 업데이트 시작을 창 `onAppear`가 아니라 앱 시작에 연결(창이 안 열린 채 시작해도 동작), 클립보드를 읽는 동안 패널이 닫히거나 클립보드가 바뀌면 채우지 않음, Return 뒤 "불러오면 추가"를 화면이 아니라 모델이 직접 기다림, "메인 창에서 고르기"는 불러온 재생목록을 넘겨 다시 조회하지 않음(`ExtractViewModel.showLoaded`), 패널이 이미 열려 있으면 다시 열어도 입력을 지우지 않음, 썸네일 뷰 공용화(`VideoThumbnail`), 중복 코드 정리. 반영 안 함 1건: 메인 창에 불러온 것을 패널 재생목록으로 바꾸는 것은 사용자가 그 재생목록을 열기로 한 동작이므로 그대로 둠. 로컬 Debug `test` 121개 통과, 런타임 이슈 0건
+- 추가 버튼 이름(2026-11-15 사용자 결정): 누르면 바로 추출이 시작되면(진행·대기 항목 없음) "MP3로 추출"/"FLAC으로 추출"/"12개 추출"(내려받기 아이콘), 다른 영상이 추출 중이거나 대기 중이면 "대기열에 추가"/"12개 대기열에 추가"(더하기 아이콘). 메인 창과 패널이 `ExtractViewModel.addButtonTitle`을 같이 쓴다. 로컬 `test` 123개 통과
+- 패널 테두리: 사각형 검정 테두리·흐린 사각형 제거(macOS 26은 `NSGlassEffectView`를 40pt 투명 여백 안에 두고 창 그림자 끔, 14~15는 둥글게 자른 `NSVisualEffectView`). 스크린숏 밝기 비교로 확인
+- 메인 창 행 아이콘(2026-11-15 사용자 결정): 색 네모 배지가 이모지처럼 보여 회색 선 SF Symbol(`RowIcon`)로 바꿈
 
 ## 대기열·재생목록 (2026-11-14, PR #15)
 - 사용자 결정: 한 번에 하나씩 추출, 재생목록은 목록을 보여 주고 고르기(비공개·삭제 영상 기본 제외), 재생목록 이름 하위 폴더(순번 없음), 포맷·저장 위치는 대기열에 넣을 때 고정. 설계는 PROJECT.md 5장
@@ -32,7 +47,7 @@
 - `ExtractViewModel`: 주소 입력·불러오기·재생목록 선택·대기열에 추가만(추출 상태는 대기열로). 화면: "재생목록 영상"·"대기열" 섹션, 아래 바에 대기열 요약·"대기열에 추가"/"선택한 N개 추가"
 - 테스트: `ExtractQueueTests`(10개), `ExtractViewModelTests` 재작성, 재생목록 해석, 네트워크 재생목록 테스트(`TEST_RUNNER_STOW_NETWORK_TEST_PLAYLIST=<URL>` 지정 시). 로컬 Debug `test` 99개 통과, 런타임 이슈 0건
 - 코드 리뷰(PR #15) 반영 8건: 실행 토큰으로 다시 시도 시 이전 진행률 차단, 일시 정지 중 항목 추가·다시 시도는 대기열 재개, 재생목록 항목 ID 중복 제거, 영상만 남김(ID 11자·`_type`·`ie_key`로 하위 재생목록·채널 탭 제외), 진행률은 항목별 관찰 객체(`ItemProgress`, 그 행만 다시 그림), 재생목록은 처음 500개까지(`--playlist-end`, `playlist_count`로 잘렸음을 표시), 선택 수는 바로 계산, 주석·조건 정리. 로컬 Debug `test` 103개 통과, 런타임 이슈 0건
-- 아직 확인하지 않은 것(0.3.0 배포 전에 할 것): 실제 재생목록 URL 조회(사용자 URL 필요, `TEST_RUNNER_STOW_NETWORK_TEST_PLAYLIST=<URL>`), 사용자 화면 점검(재생목록 고르기, 대기열 진행·취소·다시 시도)
+- 사용자 화면 점검 통과(2026-11-14, "테스트 잘 돼"): 재생목록 고르기(실제 재생목록 주소), 대기열 진행·취소·다시 시도. 자동 네트워크 재생목록 테스트(`TEST_RUNNER_STOW_NETWORK_TEST_PLAYLIST=<URL>`)는 돌리지 않음
 
 ## 앱 자동 업데이트 Sparkle (2026-11-14, `feat/sparkle`)
 - 사용자 결정: 도입, 하루 한 번 확인 후 설치 여부를 묻는다(Sparkle 기본 창), appcast는 최신 릴리스 파일(`releases/latest/download/appcast.xml`). 설계는 PROJECT.md 5장
@@ -183,8 +198,8 @@ TEST_RUNNER_STOW_NETWORK_TEST_URL='<유튜브 URL>' TEST_RUNNER_STOW_NETWORK_TES
 ## 다음 작업
 - (완료) UI 다듬기: PR #7 병합 / 5a 배포: v0.1.0 공개
 - (완료) 대기열·재생목록: PR #15 병합
-- 0.3.0 배포 준비(Sparkle + 대기열): 재생목록 네트워크 테스트·사용자 화면 점검 → `MARKETING_VERSION` 0.3.0, `CURRENT_PROJECT_VERSION` 3, `docs/release/notes/0.3.0.md` → 배포는 사용자 지시 후. 배포 뒤 0.3.0 → 다음 버전으로 Sparkle 업데이트를 실제로 확인
+- 0.3.0 배포 준비(Sparkle + 대기열 + 빠른 추출 패널): 빠른 추출 패널 PR 병합 → `MARKETING_VERSION` 0.3.0, `CURRENT_PROJECT_VERSION` 3, `docs/release/notes/0.3.0.md` → 배포는 사용자 지시 후. 배포 뒤 0.3.0 → 다음 버전으로 Sparkle 업데이트를 실제로 확인
 - (완료) v0.2.0 공개(2026-11-14): DMG 65840114바이트, SHA-256 `0e5c32ea94b0303f7f0468f07fbd4fe76697f3f2e00458db79a91dedb1027ed2`. 초안을 다시 받아 체크섬·로컬 파일 일치, DMG 안 앱 0.2.0·번들 yt-dlp 2026.10.26·서명 검증 확인 후 공개. 0.1.0 사용자는 새 DMG로 교체(번들 ID가 같아 설정 유지)
 - 5a 남은 확인: 다른 Mac 또는 다른 사용자 계정에서 최신 DMG 설치(그래도 열기) → 추출까지 확인(사용자). 문제가 나오면 패치 버전으로 고친다
 - 5b 서명·공증(계정 준비 후): Developer ID 서명·공증·stapler, Developer ID 서명에서 Python 확장 모듈 로드 확인, 앱 `disable-library-validation` 제거(Sparkle)
-- MVP 이후: PROJECT.md 2장 목록(엔진 업데이트, Sparkle, 대기열, 결제, 글로벌 단축키 플로팅 패널 등). 글로벌 단축키 패널은 시작 전에 PROJECT.md 8장의 미정 사항을 사용자와 정한다
+- MVP 이후: PROJECT.md 2장 목록(결제 미정, 기타 후보). 글로벌 단축키 패널은 PR 진행 중

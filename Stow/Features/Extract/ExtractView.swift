@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 추출 화면(디자인 A안 "시스템 설정형", Apple HIG 기준).
 /// 묶음 상자(grouped Form): "영상"(주소·불러온 영상) → "재생목록 영상"(재생목록일 때 고르기) → "출력" → "대기열".
-/// 아래 고정 바: 대기열 요약과 "대기열에 추가".
+/// 아래 고정 바: 대기열 요약과 추출(다른 영상이 추출 중이면 "대기열에 추가") 버튼.
 struct ExtractView: View {
     @Bindable var model: ExtractViewModel
     @Bindable var queue: ExtractQueue
@@ -72,7 +72,7 @@ struct ExtractView: View {
             Label {
                 Text("주소")
             } icon: {
-                SettingsIcon(symbol: "link", color: .blue)
+                RowIcon(symbol: "link")
             }
         }
         .onSubmit { model.submit() }
@@ -113,7 +113,7 @@ struct ExtractView: View {
                 Button {
                     model.addToQueue()
                 } label: {
-                    Label(addTitle, systemImage: "plus.circle.fill")
+                    Label(model.addButtonTitle, systemImage: model.addButtonSymbol)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -123,13 +123,6 @@ struct ExtractView: View {
         }
     }
 
-    private var addTitle: String {
-        if case .playlist = model.state {
-            "선택한 \(model.pendingAddCount)개 추가"
-        } else {
-            "대기열에 추가"
-        }
-    }
 
     @ViewBuilder
     private var summary: some View {
@@ -378,17 +371,15 @@ enum ProgressText {
 
 // MARK: - 공통 하위 화면
 
-/// 시스템 설정의 행 아이콘: 색 사각형 위 흰 SF Symbol.
-private struct SettingsIcon: View {
+/// 행 아이콘: 회색 선 SF Symbol(색 배지는 이모지처럼 보여 쓰지 않는다, 사용자 결정 2026-11-15).
+private struct RowIcon: View {
     let symbol: String
-    let color: Color
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .frame(width: 20)
             .accessibilityHidden(true)
     }
 }
@@ -399,26 +390,7 @@ private struct VideoRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            AsyncImage(url: metadata.thumbnailURL) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(.quaternary)
-                        .overlay {
-                            Image(systemName: "play.rectangle")
-                                .font(.system(size: 20, weight: .light))
-                                .foregroundStyle(.secondary)
-                        }
-                }
-            }
-            .frame(width: 112, height: 63)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(Color(nsColor: .separatorColor))
-            }
-            .accessibilityHidden(true)
+            VideoThumbnail(url: metadata.thumbnailURL, width: 112, cornerRadius: 6)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(metadata.title)
@@ -442,6 +414,34 @@ private struct VideoRow: View {
     }
 }
 
+/// 영상 썸네일(16:9). 불러오지 못하면 자리표시를 보여 준다. 메인 창과 빠른 추출 패널이 같이 쓴다.
+struct VideoThumbnail: View {
+    let url: URL?
+    let width: CGFloat
+    var cornerRadius: CGFloat = 6
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        AsyncImage(url: url) { phase in
+            if case .success(let image) = phase {
+                image.resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Rectangle()
+                    .fill(.quaternary)
+                    .overlay {
+                        Image(systemName: "play.rectangle")
+                            .font(.system(size: width * 0.18, weight: .light))
+                            .foregroundStyle(.secondary)
+                    }
+            }
+        }
+        .frame(width: width, height: (width * 9 / 16).rounded())
+        .clipShape(shape)
+        .overlay { shape.strokeBorder(Color(nsColor: .separatorColor)) }
+        .accessibilityHidden(true)
+    }
+}
+
 /// "출력" 섹션: 포맷 · 음질 · 저장 위치. 대기열에 넣을 때의 값이 그 항목에 고정된다.
 private struct OutputSection: View {
     @Bindable var settings: AppSettings
@@ -456,7 +456,7 @@ private struct OutputSection: View {
                 Label {
                     Text("포맷")
                 } icon: {
-                    SettingsIcon(symbol: "waveform", color: .purple)
+                    RowIcon(symbol: "waveform")
                 }
             }
             .pickerStyle(.segmented)
@@ -489,7 +489,7 @@ private struct OutputSection: View {
                 Label {
                     Text("저장 위치")
                 } icon: {
-                    SettingsIcon(symbol: "folder.fill", color: .cyan)
+                    RowIcon(symbol: "folder")
                 }
             }
         } header: {
@@ -504,7 +504,7 @@ private struct OutputSection: View {
         Label {
             Text("음질")
         } icon: {
-            SettingsIcon(symbol: "dial.medium", color: .orange)
+            RowIcon(symbol: "dial.medium")
         }
     }
 
