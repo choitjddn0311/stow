@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Stow 앱 아이콘 원본(시안 C-1). macOS 아이콘 격자: 1024 캔버스, 본체 824, 여백 100. -->
+  <!-- 수정 후 scripts/render-app-icon.sh로 AppIcon.appiconset PNG를 다시 만든다. -->
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#46D6BA"/>
+      <stop offset="1" stop-color="#0C7570"/>
+    </linearGradient>
+    <linearGradient id="highlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- 아래쪽 그림자 -->
+  <rect x="100" y="112" width="824" height="824" rx="185" fill="#000000" fill-opacity="0.10"/>
+  <rect x="100" y="106" width="824" height="824" rx="185" fill="#000000" fill-opacity="0.10"/>
+  <!-- 본체 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#body)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#highlight)"/>
+  <rect x="104" y="104" width="816" height="816" rx="181" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="6"/>
+  <!-- 파형 -->
+  <path d="M296 420 C336 316 396 316 436 420 S536 524 576 420 S688 316 728 420" fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round"/>
+  <!-- 보관함 -->
+  <path d="M288 572 H408 L440 634 H584 L616 572 H736 V700 Q736 756 680 756 H344 Q288 756 288 700 Z" fill="#FFFFFF" fill-opacity="0.95"/>
+</svg>
