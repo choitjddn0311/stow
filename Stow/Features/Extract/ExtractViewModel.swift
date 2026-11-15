@@ -90,6 +90,28 @@ final class ExtractViewModel {
 
     var canAddToQueue: Bool { pendingAddCount > 0 }
 
+    /// 추가 버튼 이름. 누르면 바로 추출이 시작되면(진행 중·대기 중인 항목이 없음) "추출",
+    /// 다른 영상 뒤에 줄을 서면 "대기열에 추가"라고 부른다.
+    /// 예: "MP3로 추출", "FLAC으로 추출", "12개 추출", "대기열에 추가", "12개 대기열에 추가"
+    /// 아직 불러오지 않았을 때(빠른 추출 패널)는 영상 하나로 보고 부른다.
+    var addButtonTitle: String {
+        let startsNow = !queue.isRunning && queue.waitingCount == 0
+        let count: String? = if case .playlist = state { "\(pendingAddCount)개" } else { nil }
+        switch (startsNow, count) {
+        case (true, let count?): return "\(count) 추출"
+        case (true, nil):
+            let kind = settings.formatKind
+            return "\(kind.displayName)\(kind == .flac ? "으로" : "로") 추출"
+        case (false, let count?): return "\(count) 대기열에 추가"
+        case (false, nil): return "대기열에 추가"
+        }
+    }
+
+    /// 추가 버튼 아이콘: 바로 추출이면 내려받기, 줄을 서면 더하기.
+    var addButtonSymbol: String {
+        !queue.isRunning && queue.waitingCount == 0 ? "arrow.down.circle.fill" : "plus.circle.fill"
+    }
+
     // MARK: - 동작
 
     /// 주소를 검증하고 영상 정보(또는 재생목록)를 불러온다(자동 불러오기도 이 함수를 쓴다).
@@ -122,9 +144,7 @@ final class ExtractViewModel {
             case .success(.video(let metadata)):
                 state = .video(metadata)
             case .success(.playlist(let playlist)):
-                // 비공개·삭제된 영상은 기본 선택에서 뺀다.
-                selectedEntryIDs = Set(playlist.entries.filter { !$0.isUnavailable }.map(\.id))
-                state = .playlist(playlist)
+                showPlaylist(playlist)
             case .failure(is CancellationError):
                 state = .idle
             case .failure(let error):
@@ -168,6 +188,21 @@ final class ExtractViewModel {
         startOver()
     }
 
+    /// 다른 곳(빠른 추출 패널)에서 이미 불러온 재생목록을 다시 조회하지 않고 보여 준다.
+    /// 이 화면에 불러와 있던 것이나 진행 중인 조회는 버린다(사용자가 이 재생목록을 열기로 했으므로).
+    func showLoaded(_ playlist: Playlist, urlText text: String) {
+        autoFetchTask?.cancel()
+        if isFetching {
+            currentFetchID = nil
+            task?.cancel()
+        }
+        retryAlert = nil
+        // 불러온 주소로 먼저 기록해, 주소란을 바꿀 때 자동 불러오기가 돌지 않게 한다.
+        loadedURLText = text
+        urlText = text
+        showPlaylist(playlist)
+    }
+
     /// 진행 중인 조회를 취소한다.
     func cancelFetch() {
         task?.cancel()
@@ -209,6 +244,12 @@ final class ExtractViewModel {
     }
 
     // MARK: - 내부
+
+    private func showPlaylist(_ playlist: Playlist) {
+        // 비공개·삭제된 영상은 기본 선택에서 뺀다.
+        selectedEntryIDs = Set(playlist.entries.filter { !$0.isUnavailable }.map(\.id))
+        state = .playlist(playlist)
+    }
 
     /// 주소가 바뀌었을 때: 이전 결과를 지우고, 잠시 뒤 새 주소를 자동으로 불러온다.
     private func urlTextDidChange(from oldValue: String) {

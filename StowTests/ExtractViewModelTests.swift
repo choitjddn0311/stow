@@ -193,6 +193,42 @@ struct ExtractViewModelTests {
         await queue.waitUntilIdle()
     }
 
+    @Test func addButtonSaysExtractWhenQueueIsIdleOtherwiseAddToQueue() async {
+        let engine = FakeEngine(media: .success(.video(sampleMetadata)), extractGate: AsyncGate())
+        let (model, queue, _) = await loaded(engine)
+        model.settings.formatKind = .mp3
+        #expect(model.addButtonTitle == "MP3로 추출")
+        #expect(model.addButtonSymbol == "arrow.down.circle.fill")
+        model.settings.formatKind = .flac
+        #expect(model.addButtonTitle == "FLAC으로 추출")
+
+        // 하나가 추출 중이면 다음 것은 줄을 선다.
+        model.addToQueue()
+        await waitUntil { queue.isRunning }
+        model.urlText = validURL
+        model.fetch()
+        await model.waitForTask()
+        #expect(model.addButtonTitle == "대기열에 추가")
+        #expect(model.addButtonSymbol == "plus.circle.fill")
+        queue.cancelAll()
+        await queue.waitUntilIdle()
+        #expect(model.addButtonTitle == "FLAC으로 추출")
+    }
+
+    @Test func addButtonCountsPlaylistEntries() async {
+        let engine = FakeEngine(media: .success(.playlist(samplePlaylist)), extractGate: AsyncGate())
+        let (model, queue, _) = await loaded(engine)
+        #expect(model.addButtonTitle == "2개 추출")
+        model.addToQueue()
+        await waitUntil { queue.isRunning }
+        model.urlText = "https://www.youtube.com/playlist?list=PL1"
+        model.fetch()
+        await model.waitForTask()
+        #expect(model.addButtonTitle == "2개 대기열에 추가")
+        queue.cancelAll()
+        await queue.waitUntilIdle()
+    }
+
     // MARK: - 재생목록
 
     @Test func playlistSelectsAvailableEntriesByDefault() async {
