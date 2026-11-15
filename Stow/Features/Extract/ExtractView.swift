@@ -72,7 +72,7 @@ struct ExtractView: View {
             Label {
                 Text("주소")
             } icon: {
-                SettingsIcon(symbol: "link", color: .blue)
+                RowIcon(symbol: "link")
             }
         }
         .onSubmit { model.submit() }
@@ -371,17 +371,15 @@ enum ProgressText {
 
 // MARK: - 공통 하위 화면
 
-/// 시스템 설정의 행 아이콘: 색 사각형 위 흰 SF Symbol.
-private struct SettingsIcon: View {
+/// 행 아이콘: 회색 선 SF Symbol(색 배지는 이모지처럼 보여 쓰지 않는다, 사용자 결정 2026-11-15).
+private struct RowIcon: View {
     let symbol: String
-    let color: Color
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .frame(width: 20)
             .accessibilityHidden(true)
     }
 }
@@ -458,7 +456,7 @@ private struct OutputSection: View {
                 Label {
                     Text("포맷")
                 } icon: {
-                    SettingsIcon(symbol: "waveform", color: .purple)
+                    RowIcon(symbol: "waveform")
                 }
             }
             .pickerStyle(.segmented)
@@ -491,7 +489,7 @@ private struct OutputSection: View {
                 Label {
                     Text("저장 위치")
                 } icon: {
-                    SettingsIcon(symbol: "folder.fill", color: .cyan)
+                    RowIcon(symbol: "folder")
                 }
             }
         } header: {
@@ -506,7 +504,7 @@ private struct OutputSection: View {
         Label {
             Text("음질")
         } icon: {
-            SettingsIcon(symbol: "dial.medium", color: .orange)
+            RowIcon(symbol: "dial.medium")
         }
     }
 
