@@ -13,11 +13,16 @@ struct StowApp: App {
     /// 설정은 Config/Stow-Info.plist).
     /// 테스트 호스트나 배포 전 실행 확인(release.sh) 때는 시작하지 않는다.
     private let updaterController: SPUStandardUpdaterController
+    /// 미룬 업데이트를 하루에 한 번만 다시 띄운다(Sparkle은 델리게이트를 약하게 잡으므로 여기서 붙잡아 둔다).
+    @State private var updateReminder: UpdateReminder
 
     init() {
+        let updateReminder = UpdateReminder()
+        _updateReminder = State(initialValue: updateReminder)
         updaterController = SPUStandardUpdaterController(
-            startingUpdater: !Self.updatersDisabled, updaterDelegate: nil, userDriverDelegate: nil
+            startingUpdater: !Self.updatersDisabled, updaterDelegate: nil, userDriverDelegate: updateReminder
         )
+        updateReminder.updater = updaterController.updater
         let settings = AppSettings()
         _settings = State(initialValue: settings)
         let coordinator: AppCoordinator
@@ -63,7 +68,8 @@ struct StowApp: App {
             guard startUpdaters else { return }
             engineUpdates?.start()
             // 릴리스 직후 앱을 켠 사용자에게 바로 알리도록 시작할 때도 확인한다(주기 확인은 1시간).
-            // 사용자가 자동 확인을 꺼 두었으면 하지 않는다. 새 버전이 없으면 아무것도 띄우지 않는다.
+            // 사용자가 자동 확인을 꺼 두었으면 하지 않는다. 새 버전이 없으면 아무것도 띄우지 않고,
+            // 미룬 버전은 하루가 지나기 전에는 창 대신 메뉴 막대 메뉴로만 알린다(UpdateReminder).
             if appUpdater.automaticallyChecksForUpdates {
                 appUpdater.checkForUpdatesInBackground()
             }
@@ -105,7 +111,7 @@ struct StowApp: App {
 
         // 창을 닫아도 앱은 메뉴 막대에 남아 빠른 추출 단축키가 동작한다(사용자 결정 2026-11-14).
         MenuBarExtra {
-            MenuBarMenu(coordinator: coordinator)
+            MenuBarMenu(coordinator: coordinator, updateReminder: updateReminder)
         } label: {
             Image(systemName: "waveform")
                 .accessibilityLabel("Stow")

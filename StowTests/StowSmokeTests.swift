@@ -22,7 +22,7 @@ struct StowSmokeTests {
         #expect(parts.dropFirst().allSatisfy { $0 == 0 })
     }
 
-    /// 앱 새 버전 확인: 자동 확인을 켜고 1시간마다(사용자 결정 2026-11-17, 릴리스 직후 알림).
+    /// 앱 새 버전 확인: 자동 확인을 켜고 1시간마다(릴리스 직후 알림이 뜨도록).
     /// 3600초는 Sparkle이 허용하는 가장 짧은 주기다.
     @Test func sparkleChecksHourly() throws {
         #expect(Bundle.main.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool == true)
