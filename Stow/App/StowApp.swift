@@ -70,6 +70,8 @@ struct StowApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .appInfo) {
+                OpenSourceLicensesButton()
+                Divider()
                 CheckForUpdatesButton(updater: updaterController.updater)
                 Divider()
                 Button("엔진 업데이트 확인…") { engineUpdates?.checkNow() }
@@ -82,6 +84,12 @@ struct StowApp: App {
         Settings {
             SettingsView()
         }
+
+        Window("오픈소스 라이선스", id: OpenSourceLicensesView.windowID) {
+            OpenSourceLicensesView()
+        }
+        .defaultSize(width: 760, height: 540)
+        .windowResizability(.contentMinSize)
 
         // 창을 닫아도 앱은 메뉴 막대에 남아 빠른 추출 단축키가 동작한다(사용자 결정 2026-11-14).
         MenuBarExtra {

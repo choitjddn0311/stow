@@ -15,6 +15,22 @@ LAME_SHA256=ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e
 FFMPEG_VERSION=9.0.2
 FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
 
+# scripts/build-ffmpeg.sh --sources DIR: 빌드에 쓰는 원본 소스(체크섬 검증)를 DIR에 복사만 한다.
+# LGPL 소스 제공용으로 release.sh가 릴리스에 함께 올린다.
+if [[ ${1:-} == --sources ]]; then
+  dest=${2:-}
+  [[ -n $dest ]] || die "사용법: scripts/build-ffmpeg.sh --sources <폴더>"
+  src="$CACHE_DIR/src"
+  download_verified "https://downloads.sourceforge.net/project/lame/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz" \
+    "$LAME_SHA256" "$src/lame-$LAME_VERSION.tar.gz"
+  download_verified "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" \
+    "$FFMPEG_SHA256" "$src/ffmpeg-$FFMPEG_VERSION.tar.xz"
+  mkdir -p "$dest"
+  install -m 644 "$src/ffmpeg-$FFMPEG_VERSION.tar.xz" "$src/lame-$LAME_VERSION.tar.gz" "$dest/"
+  exit 0
+fi
+[[ $# == 0 ]] || die "알 수 없는 옵션: $1 (사용법: scripts/build-ffmpeg.sh [--sources <폴더>])"
+
 [[ $(uname -m) == arm64 ]] || die "Apple Silicon(arm64)에서만 실행할 수 있습니다."
 
 # 이 스크립트와 공통 스크립트의 내용이 같으면 같은 빌드로 본다.

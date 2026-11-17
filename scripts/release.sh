@@ -2,7 +2,8 @@
 # 배포용 DMG를 만든다(5a: Apple Developer 계정 없이 ad-hoc 서명).
 #
 #   scripts/release.sh            DMG만 만든다(build/release/Stow-<버전>.dmg와 .sha256)
-#   scripts/release.sh --publish  만든 DMG를 GitHub Releases에 "초안(draft)"으로 올린다.
+#                                 LGPL 구성 요소(FFmpeg·LAME)의 원본 소스도 build/release/sources/에 모은다.
+#   scripts/release.sh --publish  만든 DMG와 LGPL 소스를 GitHub Releases에 "초안(draft)"으로 올린다.
 #                                 공개는 GitHub에서 초안을 확인한 뒤 직접 한다.
 #   scripts/release.sh --notes    빌드·업로드 없이 릴리스 노트만 만들어 보여 준다(미리보기).
 #
@@ -48,6 +49,13 @@ BUNDLE_ID=$(setting PRODUCT_BUNDLE_IDENTIFIER)
   || die "버전·빌드 번호·최소 macOS·번들 ID를 빌드 설정에서 읽지 못했습니다."
 TAG="v$VERSION"
 DMG="$OUT/Stow-$VERSION.dmg"
+# LGPL 구성 요소의 원본 소스(build-ffmpeg.sh가 체크섬을 검증해 복사). 앱의 "오픈소스 라이선스" 창이 이 릴리스를 가리킨다.
+SOURCES="$OUT/sources"
+FFMPEG_VERSION=$(awk -F= '/^FFMPEG_VERSION=/{print $2}' scripts/build-ffmpeg.sh)
+LAME_VERSION=$(awk -F= '/^LAME_VERSION=/{print $2}' scripts/build-ffmpeg.sh)
+[[ -n $FFMPEG_VERSION && -n $LAME_VERSION ]] || die "build-ffmpeg.sh에서 FFmpeg·LAME 버전을 읽지 못했습니다."
+FFMPEG_SOURCE="ffmpeg-${FFMPEG_VERSION}.tar.xz"
+LAME_SOURCE="lame-${LAME_VERSION}.tar.gz"
 CHANGES="docs/release/notes/${VERSION}.md"
 REPO_URL="https://github.com/choitjddn0311/stow"
 # Sparkle 업데이트 서명키(EdDSA)의 키체인 계정. 공개키는 Config/Stow-Info.plist의 SUPublicEDKey.
@@ -117,7 +125,10 @@ macOS 14 이상, Apple Silicon(M1 이후) 전용입니다.
 
 SHA-256: \`$sha\`
 
-본인이 저작권을 가지고 있거나 사용 허락을 받은 영상에만 사용하세요. 오픈소스 구성 요소와 라이선스는 [README](https://github.com/choitjddn0311/stow#오픈소스-구성-요소)를 참고하세요.
+본인이 저작권을 가지고 있거나 사용 허락을 받은 영상에만 사용하세요. 오픈소스 구성 요소와 라이선스는 앱 메뉴 "오픈소스 라이선스…"와 [README](https://github.com/choitjddn0311/stow#오픈소스-구성-요소)를 참고하세요.
+
+### LGPL 소스
+앱에 들어 있는 FFmpeg·LAME(LGPL)의 원본 소스는 아래 Assets의 \`$FFMPEG_SOURCE\`, \`$LAME_SOURCE\`입니다. 빌드 방법은 이 버전 소스 코드의 \`scripts/build-ffmpeg.sh\`에 있습니다.
 EOF
   } > "$file"
 }
@@ -192,6 +203,12 @@ leaked=$(grep -rlaiF -e "$REPO_ROOT" -e "$HOME/" "$APP" || true)
 [[ -z $leaked ]] || die "앱에 로컬 경로가 남아 있습니다:$(printf '\n%s' "$leaked" | head -4)"
 [[ -d $APP/Contents/Frameworks/Sparkle.framework ]] || die "앱에 Sparkle.framework가 없습니다."
 [[ $(plutil -extract SUPublicEDKey raw "$APP/Contents/Info.plist" 2>/dev/null) != "" ]] || die "Info.plist에 SUPublicEDKey가 없습니다."
+# 오픈소스 라이선스 원문(앱의 "오픈소스 라이선스" 창). Sparkle 원문은 저장소에 복사해 두므로 Sparkle을 올리면 같이 바꾼다.
+for f in KeyboardShortcuts-LICENSE.txt Sparkle-LICENSE.txt bin/licenses/ffmpeg-COPYING.LGPLv2.1.txt bin/licenses/lame-COPYING.txt; do
+  [[ -s $APP/Contents/Resources/$f ]] || die "앱에 라이선스 원문이 없습니다: $f"
+done
+cmp -s "$APP/Contents/Resources/Sparkle-LICENSE.txt" "$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/LICENSE" \
+  || die "Stow/Licenses/Sparkle-LICENSE.txt가 빌드에 쓴 Sparkle의 LICENSE와 다릅니다. 새 원문으로 바꾸세요."
 # 앱을 실제로 실행해 시작 직후 종료되지 않는지 본다. 프레임워크 로드·서명 문제(예: 라이브러리 검증)는
 # 실행해야 드러난다. 실행하면 창이 잠깐 떴다가 닫힌다. STOW_DISABLE_UPDATERS=1: Sparkle·엔진 업데이트를 끄고
 # 실행해, 실제 사용자 설정·엔진 저장소를 건드리거나 네트워크로 받는 도중에 종료되지 않게 한다.
@@ -216,6 +233,11 @@ hdiutil verify "$DMG" >/dev/null || die "DMG 검증 실패"
 (cd "$OUT" && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
 log "완료: $DMG ($(du -h "$DMG" | cut -f1))"
 cat "$DMG.sha256" >&2
+
+# 4b. LGPL 소스(FFmpeg·LAME 원본, 체크섬 검증)
+log "LGPL 소스 모으기"
+scripts/build-ffmpeg.sh --sources "$SOURCES"
+[[ -s $SOURCES/$FFMPEG_SOURCE && -s $SOURCES/$LAME_SOURCE ]] || die "LGPL 소스를 모으지 못했습니다: $SOURCES"
 
 # 5. Sparkle: DMG에 EdDSA 서명 → appcast.xml 생성·서명 → 둘 다 검증
 SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
@@ -244,7 +266,7 @@ fi
 if [[ $PUBLISH == 1 ]]; then
   notes="$OUT/release-notes.md"
   write_notes "$notes" "$(cut -d' ' -f1 "$DMG.sha256")"
-  gh release create "$TAG" "$DMG" "$DMG.sha256" "$APPCAST" --draft --title "Stow $VERSION" \
+  gh release create "$TAG" "$DMG" "$DMG.sha256" "$APPCAST" "$SOURCES/$FFMPEG_SOURCE" "$SOURCES/$LAME_SOURCE" --draft --title "Stow $VERSION" \
     --notes-file "$notes" --target "$(git rev-parse HEAD)"
   log "GitHub Releases에 초안 ${TAG}를 만들었습니다. GitHub에서 확인한 뒤 공개하세요."
 fi
