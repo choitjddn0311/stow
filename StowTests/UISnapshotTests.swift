@@ -44,7 +44,7 @@ struct UISnapshotTests {
     }
 
     /// 빠른 추출 패널: 상태 × (라이트·다크)
-    @Test(arguments: [MainState.idle, .fetching, .video, .playlist, .failed])
+    @Test(arguments: [MainState.idle, .fetching, .video, .playlist, .failed, .videoMode])
     func quickPanelRenders(state: MainState) async throws {
         for dark in [false, true] {
             let fixture = try await Fixture.make(state)
@@ -104,6 +104,8 @@ struct UISnapshotTests {
 
     enum MainState: String, CaseIterable, Sendable {
         case idle, fetching, video, playlist, failed, queue, paused
+        /// 종류를 영상으로 바꾼 상태 + 영상 항목을 받는 대기열
+        case videoMode
     }
 
     private struct Fixture {
@@ -166,6 +168,22 @@ struct UISnapshotTests {
                 }
                 #expect(queue.items[2].status == .running, "추출 중 상태를 만들지 못함")
                 #expect(queue.completedCount == 1 && queue.failedCount == 1, "완료·실패 상태를 만들지 못함")
+            case .videoMode:
+                engine.media = .success(.video(video))
+                model.urlText = validURL
+                model.fetch()
+                await model.waitForTask()
+                settings.select(.video(.mp4, .p1080))
+                let videoOptions = ExtractOptions(format: .video(.best, .p2160), outputDirectory: directory)
+                queue.add([
+                    item("done 완료한 곡"),
+                    ExtractQueue.Item(url: URL(string: "https://youtu.be/abc12345678")!, title: "run 받는 중인 영상", options: videoOptions),
+                    ExtractQueue.Item(url: URL(string: "https://youtu.be/abc12345678")!, title: "대기 중인 영상", options: videoOptions),
+                ])
+                for _ in 0..<300 where queue.items[1].progress.value == nil {
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
+                #expect(queue.items[1].status == .running, "영상 받는 중 상태를 만들지 못함")
             case .paused:
                 queue.add([item("blocked 막힌 곡"), item("대기 중인 곡")])
                 for _ in 0..<300 where !queue.isPaused {
@@ -264,11 +282,15 @@ private final class SnapshotEngine: AudioExtracting, @unchecked Sendable {
         progress: @escaping @Sendable (ExtractProgress) -> Void
     ) async throws -> URL {
         if fileName.hasPrefix("done") {
-            return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension)")
+            return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension ?? "mp4")")
         }
         if fileName.hasPrefix("fail") { throw EngineError.network }
         if fileName.hasPrefix("blocked") { throw EngineError.blockedByYouTube }
-        progress(.downloading(fraction: 0.42, bytesPerSecond: 1_200_000, secondsRemaining: 18))
+        // 영상은 오디오 스트림을 받는 단계(영상은 이미 받음)로 보여 준다.
+        progress(.downloading(
+            fraction: 0.42, bytesPerSecond: 1_200_000, secondsRemaining: 18,
+            part: options.format.isVideo ? .audio : .combined
+        ))
         try await Task.sleep(for: .seconds(600))
         throw CancellationError()
     }

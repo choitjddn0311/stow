@@ -29,16 +29,9 @@ struct YtDlpArguments: Sendable {
         ]
     }
 
-    /// 오디오 추출. 작업 폴더에 `<영상 ID>.<확장자>`로 저장한다(최종 이름은 호출한 쪽에서 정한다).
-    func extract(_ url: URL, format: AudioFormat, workDirectory: URL) -> [String] {
-        var arguments = common + [
-            "--format", "bestaudio/best",
-            "--extract-audio",
-            "--audio-format", format.fileExtension,
-        ]
-        if case .mp3(let bitrate) = format {
-            arguments += ["--audio-quality", "\(bitrate.rawValue)K"]
-        }
+    /// 오디오 추출 또는 영상 다운로드. 작업 폴더에 `<영상 ID>.<확장자>`로 저장한다(최종 이름은 호출한 쪽에서 정한다).
+    func extract(_ url: URL, format: OutputFormat, workDirectory: URL) -> [String] {
+        var arguments = common + Self.formatArguments(for: format)
         arguments += [
             "--embed-metadata",
             // 중간 파일과 결과 파일을 모두 작업 폴더에 둔다. "home:"을 붙여 경로의 ":"가 형식 구분자로 해석되지 않게 한다.
@@ -55,5 +48,37 @@ struct YtDlpArguments: Sendable {
             url.absoluteString,
         ]
         return arguments
+    }
+
+    /// 포맷별 선택·변환 인자.
+    static func formatArguments(for format: OutputFormat) -> [String] {
+        switch format {
+        case .mp3(let bitrate):
+            ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3",
+             "--audio-quality", "\(bitrate.rawValue)K"]
+        case .wav:
+            ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "wav"]
+        case .flac:
+            ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "flac"]
+        case .video(.mp4, let resolution):
+            // H.264 영상(오디오 없는 스트림) + AAC(m4a) 오디오. 나뉜 스트림이 없으면 처음부터 합쳐진 MP4.
+            // 다시 인코딩하지 않고 MP4로 합친다. HLS(m3u8)는 고르지 않는다(MPEG-TS를 다시 담는 데
+            // 번들 ffmpeg에 없는 영상 파서가 필요할 수 있어서).
+            ["--format", "bv[vcodec^=avc1][protocol!*=m3u8]+ba[ext=m4a][protocol!*=m3u8]/b[ext=mp4][protocol!*=m3u8]"]
+                + sortArguments(resolution)
+                + ["--merge-output-format", "mp4"]
+        case .video(.best, let resolution):
+            // 가장 높은 해상도의 영상(오디오 없는 스트림) + 오디오. HLS는 고르지 않는다.
+            // QuickTime에서 열리는 MP4가 되도록 오디오는 AAC(m4a)를, 같은 해상도면 영상은 AV1을 먼저 고른다
+            // (Opus·VP9는 MP4에 담기지 않아 WebM이 된다). 그래도 안 되면 WebM, 그다음 MKV.
+            ["--format", "bv[protocol!*=m3u8]+ba[ext=m4a][protocol!*=m3u8]/bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]",
+             "--format-sort", (resolution == .best ? "res" : "res:\(resolution.rawValue)") + ",vcodec:av01",
+             "--merge-output-format", "mp4/webm/mkv"]
+        }
+    }
+
+    /// `-S res:N`: N 이하 중 가장 높은 해상도를 고르고, 그런 것이 없으면 N보다 높은 것 중 가장 낮은 것.
+    private static func sortArguments(_ resolution: VideoResolution) -> [String] {
+        resolution == .best ? [] : ["--format-sort", "res:\(resolution.rawValue)"]
     }
 }

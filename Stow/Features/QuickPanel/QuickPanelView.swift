@@ -43,6 +43,7 @@ struct QuickPanelView: View {
             Divider().padding(.horizontal, 18)
 
             HStack(spacing: Metrics.controlSpacing) {
+                KindSwitch(model: model)
                 FormatChip(model: model)
                 FolderChip(model: model)
                 Spacer(minLength: 8)
@@ -71,26 +72,50 @@ struct QuickPanelView: View {
     }
 }
 
-/// 포맷 칩: 누르면 포맷 메뉴. 바꾼 값은 메인 창 기본 설정에도 남는다.
+/// 종류 전환(오디오·영상). 메인 창 "종류"와 같은 설정이고, 바꾸면 그 종류에서 마지막에 쓴 포맷으로 돌아간다.
+private struct KindSwitch: View {
+    let model: QuickPanelModel
+
+    var body: some View {
+        @Bindable var settings = model.extract.settings
+        Picker("종류", selection: $settings.mediaKind) {
+            ForEach(MediaKind.allCases, id: \.self) { kind in
+                Label(kind.displayName, systemImage: kind.symbol).tag(kind)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .help("오디오 추출 또는 영상 받기")
+    }
+}
+
+/// 포맷 칩: 누르면 지금 종류의 포맷 메뉴. 바꾼 값은 메인 창 기본 설정에도 남는다.
 private struct FormatChip: View {
     let model: QuickPanelModel
 
     /// MP3는 높은 음질부터, 그다음 무손실 포맷
-    private static let formats: [AudioFormat] =
+    private static let audioFormats: [OutputFormat] =
         MP3Bitrate.allCases.sorted { $0.rawValue > $1.rawValue }.map { .mp3($0) } + [.wav, .flac]
+    /// 자주 쓰는 조합만. 다른 해상도는 메인 창에서 고르면 칩에 그대로 나온다.
+    private static let videoFormats: [OutputFormat] =
+        VideoFormat.mp4.resolutions.map { .video(.mp4, $0) }
+        + [.best, .p2160, .p1440, .p1080].map { .video(.best, $0) }
 
     var body: some View {
-        let current = model.extract.settings.format
+        let settings = model.extract.settings
+        let current = settings.format
+        let formats = settings.mediaKind == .video ? Self.videoFormats : Self.audioFormats
         Menu {
-            ForEach(Self.formats, id: \.self) { format in
-                if format == .wav { Divider() }
+            ForEach(formats, id: \.self) { format in
+                if format == .wav || format == .video(.best, .best) { Divider() }
                 Toggle(format.displayName, isOn: Binding(
                     get: { current == format },
                     set: { if $0 { model.select(format) } }
                 ))
             }
         } label: {
-            Label(current.displayName, systemImage: "music.note")
+            Label(current.displayName, systemImage: settings.mediaKind.symbol)
         }
         .modifier(ChipStyle())
         .help("포맷")
@@ -122,6 +147,15 @@ private struct FolderChip: View {
         .frame(maxWidth: 200, alignment: .leading)
         .help(settings.outputDirectory.path)
         .accessibilityLabel("저장 위치: \(settings.outputFolderName)")
+    }
+}
+
+extension MediaKind {
+    var symbol: String {
+        switch self {
+        case .audio: "music.note"
+        case .video: "film"
+        }
     }
 }
 

@@ -289,20 +289,20 @@ final class ExtractQueue {
         guard !completedInRun.isEmpty else { return }
         let files = completedInRun
         completedInRun = []
-        let title = files.count == 1 ? "1개 추출 완료" : "\(files.count)개 추출 완료"
+        let title = files.count == 1 ? "1개 저장 완료" : "\(files.count)개 저장 완료"
         notifier.notifyCompleted(title: title, file: files[files.count - 1])
     }
 
     private static func isVisibleChange(from shown: ExtractProgress?, to new: ExtractProgress) -> Bool {
         switch (shown, new) {
-        case (.downloading(let oldFraction, _, let oldETA)?, .downloading(let newFraction, _, let newETA)):
-            percent(oldFraction) != percent(newFraction) || oldETA != newETA
+        case (.downloading(let oldFraction, _, let oldETA, let oldPart)?, .downloading(let newFraction, _, let newETA, let newPart)):
+            percent(oldFraction) != percent(newFraction) || oldETA != newETA || oldPart != newPart
         default:
             shown != new
         }
     }
 
     private static func percent(_ fraction: Double?) -> Int? {
-        fraction.map { Int(($0 * 100).rounded()) }
+        fraction.map(displayPercent)
     }
 }

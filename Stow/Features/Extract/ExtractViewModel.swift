@@ -92,16 +92,14 @@ final class ExtractViewModel {
 
     /// 추가 버튼 이름. 누르면 바로 추출이 시작되면(진행 중·대기 중인 항목이 없음) "추출",
     /// 다른 영상 뒤에 줄을 서면 "대기열에 추가"라고 부른다.
-    /// 예: "MP3로 추출", "FLAC으로 추출", "12개 추출", "대기열에 추가", "12개 대기열에 추가"
+    /// 예: "MP3로 추출", "FLAC으로 추출", "MP4로 받기", "12개 추출", "12개 받기", "대기열에 추가", "12개 대기열에 추가"
     /// 아직 불러오지 않았을 때(빠른 추출 패널)는 영상 하나로 보고 부른다.
     var addButtonTitle: String {
         let startsNow = !queue.isRunning && queue.waitingCount == 0
         let count: String? = if case .playlist = state { "\(pendingAddCount)개" } else { nil }
         switch (startsNow, count) {
-        case (true, let count?): return "\(count) 추출"
-        case (true, nil):
-            let kind = settings.formatKind
-            return "\(kind.displayName)\(kind == .flac ? "으로" : "로") 추출"
+        case (true, let count?): return settings.format.isVideo ? "\(count) 받기" : "\(count) 추출"
+        case (true, nil): return settings.format.actionTitle
         case (false, let count?): return "\(count) 대기열에 추가"
         case (false, nil): return "대기열에 추가"
         }

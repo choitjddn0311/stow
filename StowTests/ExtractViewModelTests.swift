@@ -201,6 +201,11 @@ struct ExtractViewModelTests {
         #expect(model.addButtonSymbol == "arrow.down.circle.fill")
         model.settings.formatKind = .flac
         #expect(model.addButtonTitle == "FLAC으로 추출")
+        model.settings.mediaKind = .video
+        #expect(model.addButtonTitle == "MP4로 받기")
+        model.settings.videoFormat = .best
+        #expect(model.addButtonTitle == "최고 화질로 받기")
+        model.settings.mediaKind = .audio
 
         // 하나가 추출 중이면 다음 것은 줄을 선다.
         model.addToQueue()
@@ -289,7 +294,7 @@ struct ExtractQueueTests {
         #expect(engine.maxConcurrentExtractions == 1)
         #expect(queue.completedCount == 3)
         #expect(notifier.prepared)
-        #expect(notifier.completedTitles == ["3개 추출 완료"])
+        #expect(notifier.completedTitles == ["3개 저장 완료"])
         #expect(!queue.isRunning)
     }
 
@@ -416,7 +421,7 @@ struct ExtractQueueTests {
 @MainActor
 struct AppSettingsTests {
     @Test func defaults() {
-        let settings = AppSettings(defaults: InMemoryDefaults())
+        let settings = AppSettings(defaults: InMemoryDefaults(keepAppDefaults: true))
         #expect(settings.format == .mp3(.kbps320))
         #expect(settings.outputDirectory == AppSettings.defaultOutputDirectory)
         #expect(settings.acceptedNoticeVersion == 0)
@@ -439,6 +444,45 @@ struct AppSettingsTests {
 
         second.formatKind = .mp3
         #expect(second.format == .mp3(.kbps128))  // WAV/FLAC을 거쳐도 MP3 음질은 기억한다
+    }
+
+    /// 영상 기능 전의 설정(종류 값 없음)은 오디오로 시작하고, 영상 포맷·해상도는 기본값.
+    @Test func videoDefaultsForExistingUsers() {
+        let suite = InMemoryDefaults()
+        suite.set("wav", forKey: "formatKind")
+        let settings = AppSettings(defaults: suite)
+        #expect(settings.mediaKind == .audio)
+        #expect(settings.format == .wav)
+        settings.mediaKind = .video
+        #expect(settings.format == .video(.mp4, .p1080))
+        settings.videoFormat = .best
+        #expect(settings.format == .video(.best, .best))
+    }
+
+    /// 종류를 바꿔도 각 종류의 마지막 포맷, 영상 포맷마다의 해상도를 기억한다.
+    @Test func remembersFormatsPerKind() {
+        let suite = InMemoryDefaults()
+        let first = AppSettings(defaults: suite)
+        first.select(.flac)
+        first.select(.video(.best, .p1440))
+        first.select(.video(.mp4, .p720))
+
+        let second = AppSettings(defaults: suite)
+        #expect(second.format == .video(.mp4, .p720))
+        second.videoFormat = .best
+        #expect(second.format == .video(.best, .p1440))
+        second.mediaKind = .audio
+        #expect(second.format == .flac)
+    }
+
+    /// MP4에 없는 해상도(1080p 초과·최고)는 1080p로 맞춘다.
+    @Test func mp4ClampsResolutionsAbove1080p() {
+        let settings = AppSettings(defaults: InMemoryDefaults())
+        settings.select(.video(.mp4, .p720))
+        settings.videoResolution = .p2160
+        #expect(settings.format == .video(.mp4, .p1080))
+        settings.select(.video(.mp4, .best))
+        #expect(settings.format == .video(.mp4, .p1080))
     }
 
     /// 실제 저장소(디스크)에 쓰고 새 객체로 다시 읽어도 유지된다. 다른 테스트는 메모리 저장소를 쓰므로 여기서만 진짜 저장소를 쓴다.
@@ -479,7 +523,7 @@ struct AppSettingsTests {
     @Test func recentOutputDirectories() {
         let suite = InMemoryDefaults()
         let settings = AppSettings(defaults: suite)
-        #expect(settings.recentOutputDirectories.map(\.path) == [AppSettings.defaultOutputDirectory.path])
+        #expect(settings.recentOutputDirectories.map(\.path) == [InMemoryDefaults.testOutputDirectory.path])
 
         let folders = (1...6).map { URL(filePath: "/tmp/최근\($0)", directoryHint: .isDirectory) }
         for folder in folders { settings.outputDirectory = folder }
@@ -617,7 +661,7 @@ final class FakeEngine: AudioExtracting, @unchecked Sendable {
         progressEvents.forEach(progress)
         try await extractGate?.wait()
         try extractResult.get()
-        return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension)")
+        return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension ?? "mp4")")
     }
 }
 

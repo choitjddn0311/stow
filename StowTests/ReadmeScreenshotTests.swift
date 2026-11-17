@@ -363,7 +363,7 @@ private final class SampleEngine: AudioExtracting, @unchecked Sendable {
     ) async throws -> URL {
         switch lock.withLock({ behaviors[fileName] }) ?? .wait {
         case .done:
-            return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension)")
+            return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension ?? "mp4")")
         case .running(let fraction):
             progress(.downloading(fraction: fraction, bytesPerSecond: 2_400_000, secondsRemaining: 12))
         case .wait:
