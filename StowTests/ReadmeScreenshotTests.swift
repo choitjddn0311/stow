@@ -31,7 +31,32 @@ struct ReadmeScreenshotTests {
             try await fixture.waitForRunning()
             try await capture(
                 RootView(model: fixture.model, settings: fixture.settings),
-                size: CGSize(width: 600, height: 760), dark: dark, name: "main-\(dark ? "dark" : "light")"
+                size: CGSize(width: 600, height: 840), dark: dark, name: "main-\(dark ? "dark" : "light")"
+            )
+        } catch {
+            await fixture.tearDown()
+            throw error
+        }
+        await fixture.tearDown()
+    }
+
+    /// 영상 받기: 종류를 영상(MP4 1080p)으로 두고, 영상 항목이 오디오 스트림을 받는 중인 대기열.
+    @Test(arguments: [false, true])
+    func videoDownload(dark: Bool) async throws {
+        let fixture = try await Fixture.make(media: .video(Samples.video()))
+        fixture.settings.select(.video(.mp4, .p1080))
+        let video = ExtractOptions(format: .video(.mp4, .p1080), outputDirectory: FileManager.default.temporaryDirectory)
+        let best = ExtractOptions(format: .video(.best, .p2160), outputDirectory: FileManager.default.temporaryDirectory)
+        fixture.queue.add([
+            fixture.item("City Lights Timelapse — 4K", behavior: .done, options: best),
+            fixture.item("Rainy Afternoon (Lo-fi Session)", behavior: .runningAudio(0.4), options: video),
+            fixture.item("Piano Sketches Vol. 2", behavior: .wait, options: video),
+        ])
+        do {
+            try await fixture.waitForRunning()
+            try await capture(
+                RootView(model: fixture.model, settings: fixture.settings),
+                size: CGSize(width: 600, height: 840), dark: dark, name: "video-\(dark ? "dark" : "light")"
             )
         } catch {
             await fixture.tearDown()
@@ -235,9 +260,9 @@ struct ReadmeScreenshotTests {
             )
         }
 
-        func item(_ title: String, behavior: SampleEngine.Behavior) -> ExtractQueue.Item {
+        func item(_ title: String, behavior: SampleEngine.Behavior, options: ExtractOptions? = nil) -> ExtractQueue.Item {
             engine.setBehavior(behavior, for: title)
-            return ExtractQueue.Item(url: URL(string: ReadmeScreenshotTests.videoURL)!, title: title, options: options)
+            return ExtractQueue.Item(url: URL(string: ReadmeScreenshotTests.videoURL)!, title: title, options: options ?? self.options)
         }
 
         @MainActor
@@ -341,6 +366,7 @@ private final class SampleEngine: AudioExtracting, @unchecked Sendable {
     enum Behavior: Sendable {
         case done
         case running(Double)
+        case runningAudio(Double)
         case wait
     }
 
@@ -366,6 +392,9 @@ private final class SampleEngine: AudioExtracting, @unchecked Sendable {
             return options.outputDirectory.appending(path: "\(fileName).\(options.format.fileExtension ?? "mp4")")
         case .running(let fraction):
             progress(.downloading(fraction: fraction, bytesPerSecond: 2_400_000, secondsRemaining: 12))
+        case .runningAudio(let fraction):
+            // 영상 스트림은 받았고 오디오 스트림을 받는 중
+            progress(.downloading(fraction: fraction, bytesPerSecond: 2_400_000, secondsRemaining: 4, part: .audio))
         case .wait:
             break
         }
