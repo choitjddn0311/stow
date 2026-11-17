@@ -66,4 +66,4 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 scripts/release.sh          # 배포용 DMG(build/release/)
 ```
 
-앱 아이콘 원본은 `design/AppIcon.svg`입니다. 고친 뒤 `scripts/render-app-icon.sh`로 아이콘 PNG를 다시 만들어 함께 커밋합니다.
+앱 아이콘은 Icon Composer 문서 `Stow/AppIcon.icon`입니다(Xcode의 Icon Composer로 엽니다). 일반·다크·색조·투명 모양을 담고 있고, macOS 14~25용 아이콘은 빌드할 때 Xcode가 여기서 만듭니다.
