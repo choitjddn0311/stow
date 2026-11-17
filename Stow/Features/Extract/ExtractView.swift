@@ -317,7 +317,7 @@ private struct QueueRow: View {
                 .animation(Motion.progress(reduceMotion: reduceMotion), value: fraction)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(part == .video ? "영상 다운로드" : "오디오 다운로드")
-                .accessibilityValue("\(Int((fraction * 100).rounded()))%")
+                .accessibilityValue("\(displayPercent(fraction))%")
             } else {
                 ProgressView(value: fraction)
                     .controlSize(.small)
@@ -427,7 +427,7 @@ enum ProgressText {
             default: "다운로드 중"
             }
             guard let fraction else { return "\(verb)…" }
-            return "\(verb) \(Int((fraction * 100).rounded()))%" + (eta.map { " · 약 \($0)초 남음" } ?? "")
+            return "\(verb) \(displayPercent(fraction))%" + (eta.map { " · 약 \($0)초 남음" } ?? "")
         case .converting:
             return "\(format.displayName)(으)로 변환 중…"
         case .merging:

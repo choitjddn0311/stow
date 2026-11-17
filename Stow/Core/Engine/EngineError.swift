@@ -81,7 +81,7 @@ extension EngineError: LocalizedError {
         case .noAudioFormat:
             "이 영상에서 받을 수 있는 오디오를 찾지 못했습니다."
         case .noVideoFormat:
-            "이 영상은 고른 포맷으로 받을 수 없습니다. 다른 포맷이나 해상도로 해 보세요."
+            "이 영상은 고른 포맷으로 받을 수 없습니다. 다른 포맷으로 해 보세요."
         case .network:
             "네트워크에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요."
         case .diskFull:
@@ -140,13 +140,18 @@ enum YtDlpErrorMapper {
         (["Postprocessing:", "ffmpeg", "ffprobe"], .conversionFailed),
     ]
 
-    static func map(stderr lines: [String]) -> EngineError {
+    /// - Parameter video: 영상을 받던 중이면 true. "고른 형식이 없음"을 영상 포맷 문구(`noVideoFormat`)로 바꾼다.
+    ///   영상에 형식이 하나도 없는 경우("No video formats found")는 포맷을 바꿔도 안 되므로 그대로 둔다.
+    static func map(stderr lines: [String], video: Bool = false) -> EngineError {
         let errors = lines.filter { $0.hasPrefix("ERROR:") }
         guard !errors.isEmpty else {
             let tail = lines.filter { !$0.hasPrefix("[stow:") && !$0.hasPrefix("WARNING:") }.suffix(10)
             return .unknown(tail.joined(separator: "\n"))
         }
         let message = errors.joined(separator: "\n")
+        if video, message.localizedCaseInsensitiveContains("Requested format is not available") {
+            return .noVideoFormat
+        }
         for rule in rules where rule.patterns.contains(where: { message.localizedCaseInsensitiveContains($0) }) {
             return rule.error
         }

@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 @preconcurrency import UserNotifications
 
-/// 추출 완료 알림과 Finder 표시. ViewModel 테스트에서는 가짜 구현을 쓴다.
+/// 저장 완료 알림과 Finder 표시. ViewModel 테스트에서는 가짜 구현을 쓴다.
 @MainActor
 protocol CompletionNotifying: AnyObject {
     /// 알림 권한을 요청한다(처음 추출할 때 한 번).
@@ -32,7 +32,7 @@ final class SystemCompletionNotifier: NSObject, CompletionNotifying, UNUserNotif
 
     func notifyCompleted(title: String, file: URL) {
         let content = UNMutableNotificationContent()
-        content.title = "추출 완료"
+        content.title = "저장 완료"
         content.body = "\(title) → \(file.lastPathComponent)"
         content.sound = .default
         content.userInfo = [Self.fileKey: file.path]

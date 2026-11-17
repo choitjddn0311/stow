@@ -61,14 +61,16 @@ struct YtDlpArguments: Sendable {
         case .flac:
             ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "flac"]
         case .video(.mp4, let resolution):
-            // H.264 영상 + AAC(m4a) 오디오만 고른다. 둘로 나뉜 스트림이 없으면 처음부터 합쳐진 MP4.
-            // 다시 인코딩하지 않고 MP4로 합친다.
-            ["--format", "bv*[vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]"]
+            // H.264 영상(오디오 없는 스트림) + AAC(m4a) 오디오. 나뉜 스트림이 없으면 처음부터 합쳐진 MP4.
+            // 다시 인코딩하지 않고 MP4로 합친다. HLS(m3u8)는 고르지 않는다(MPEG-TS를 다시 담는 데
+            // 번들 ffmpeg에 없는 영상 파서가 필요할 수 있어서).
+            ["--format", "bv[vcodec^=avc1][protocol!*=m3u8]+ba[ext=m4a][protocol!*=m3u8]/b[ext=mp4][protocol!*=m3u8]"]
                 + sortArguments(resolution)
                 + ["--merge-output-format", "mp4"]
         case .video(.best, let resolution):
-            // 코덱과 관계없이 가장 좋은 영상 + 오디오. 담을 수 있는 형식 중 MP4를 먼저, 안 되면 WebM, 그다음 MKV.
-            ["--format", "bv*+ba/b"]
+            // 코덱과 관계없이 가장 좋은 영상(오디오 없는 스트림) + 오디오. HLS는 고르지 않는다.
+            // 담을 수 있는 형식 중 MP4를 먼저, 안 되면 WebM, 그다음 MKV.
+            ["--format", "bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]"]
                 + sortArguments(resolution)
                 + ["--merge-output-format", "mp4/webm/mkv"]
         }

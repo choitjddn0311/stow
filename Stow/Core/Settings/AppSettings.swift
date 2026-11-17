@@ -116,11 +116,11 @@ final class AppSettings {
             }
         }
         set {
-            // 그 포맷에 없는 해상도(예: MP4 2160p)는 무시한다.
-            guard videoFormat.resolutions.contains(newValue) else { return }
+            // 그 포맷에 없는 해상도(예: MP4 2160p)는 그 포맷이 가진 가장 가까운 아래 해상도로 맞춘다.
+            let value = videoFormat.supportedResolution(near: newValue)
             switch videoFormat {
-            case .mp4: mp4Resolution = newValue
-            case .best: bestResolution = newValue
+            case .mp4: mp4Resolution = value
+            case .best: bestResolution = value
             }
         }
     }
@@ -181,18 +181,15 @@ final class AppSettings {
         case .mp3(let bitrate):
             mp3Bitrate = bitrate
             formatKind = .mp3
-            mediaKind = .audio
         case .wav:
             formatKind = .wav
-            mediaKind = .audio
         case .flac:
             formatKind = .flac
-            mediaKind = .audio
         case .video(let video, let resolution):
             videoFormat = video
             videoResolution = resolution
-            mediaKind = .video
         }
+        mediaKind = format.isVideo ? .video : .audio
     }
 
     /// 두 폴더가 같은 위치인지(끝의 `/`, 심볼릭 링크 등 표기 차이는 무시. 예: /tmp와 /private/tmp)

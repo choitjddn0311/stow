@@ -249,7 +249,7 @@ struct YtDlpArgumentsTests {
     @Test func mp4PicksH264AndMergesWithoutAudioExtraction() {
         let arguments = YtDlpArguments(engine: engine)
             .extract(URL(string: "https://youtu.be/abc")!, format: .video(.mp4, .p720), workDirectory: URL(filePath: "/tmp/w"))
-        #expect(arguments.containsPair(["--format", "bv*[vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]"]))
+        #expect(arguments.containsPair(["--format", "bv[vcodec^=avc1][protocol!*=m3u8]+ba[ext=m4a][protocol!*=m3u8]/b[ext=mp4][protocol!*=m3u8]"]))
         #expect(arguments.containsPair(["--format-sort", "res:720"]))
         #expect(arguments.containsPair(["--merge-output-format", "mp4"]))
         #expect(!arguments.contains("--extract-audio"))
@@ -260,7 +260,7 @@ struct YtDlpArgumentsTests {
     @Test func bestQualityHasNoResolutionLimitAndFlexibleContainer() {
         let arguments = YtDlpArguments(engine: engine)
             .extract(URL(string: "https://youtu.be/abc")!, format: .video(.best, .best), workDirectory: URL(filePath: "/tmp/w"))
-        #expect(arguments.containsPair(["--format", "bv*+ba/b"]))
+        #expect(arguments.containsPair(["--format", "bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]"]))
         #expect(!arguments.contains("--format-sort"))
         #expect(arguments.containsPair(["--merge-output-format", "mp4/webm/mkv"]))
         #expect(!arguments.contains("--extract-audio"))
@@ -270,6 +270,14 @@ struct YtDlpArgumentsTests {
         let arguments = YtDlpArguments(engine: engine)
             .extract(URL(string: "https://youtu.be/abc")!, format: .video(.best, .p1440), workDirectory: URL(filePath: "/tmp/w"))
         #expect(arguments.containsPair(["--format-sort", "res:1440"]))
+    }
+
+    @Test func videoFormatErrors() {
+        let missing = ["ERROR: [youtube] abc: Requested format is not available. Use --list-formats"]
+        #expect(YtDlpErrorMapper.map(stderr: missing, video: true) == .noVideoFormat)
+        #expect(YtDlpErrorMapper.map(stderr: missing) == .noAudioFormat)
+        // 형식이 하나도 없는 영상은 포맷을 바꿔도 안 되므로 영상 포맷 문구가 아니다.
+        #expect(YtDlpErrorMapper.map(stderr: ["ERROR: [youtube] abc: No video formats found!"], video: true) == .noAudioFormat)
     }
 
     @Test func fileExtensions() {

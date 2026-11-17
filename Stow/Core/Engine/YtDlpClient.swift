@@ -84,9 +84,7 @@ struct YtDlpClient: Sendable {
             }
         }
         guard termination.isSuccess else {
-            let error = YtDlpErrorMapper.map(stderr: state.errors)
-            // "형식 없음"은 영상을 받을 때는 고른 영상 포맷이 없다는 뜻이다.
-            throw error == .noAudioFormat && options.format.isVideo ? EngineError.noVideoFormat : error
+            throw YtDlpErrorMapper.map(stderr: state.errors, video: options.format.isVideo)
         }
 
         guard let outputPath = state.output else { throw EngineError.outputMissing }

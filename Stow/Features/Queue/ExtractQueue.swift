@@ -289,7 +289,7 @@ final class ExtractQueue {
         guard !completedInRun.isEmpty else { return }
         let files = completedInRun
         completedInRun = []
-        let title = files.count == 1 ? "1개 추출 완료" : "\(files.count)개 추출 완료"
+        let title = files.count == 1 ? "1개 저장 완료" : "\(files.count)개 저장 완료"
         notifier.notifyCompleted(title: title, file: files[files.count - 1])
     }
 
@@ -303,6 +303,6 @@ final class ExtractQueue {
     }
 
     private static func percent(_ fraction: Double?) -> Int? {
-        fraction.map { Int(($0 * 100).rounded()) }
+        fraction.map(displayPercent)
     }
 }

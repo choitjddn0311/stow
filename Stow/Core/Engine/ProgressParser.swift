@@ -10,6 +10,11 @@ enum DownloadPart: Sendable, Equatable {
     case combined
 }
 
+/// 진행률(0...1)을 화면에 보이는 정수 백분율로. 문구·화면 읽기·대기열 갱신 판단이 같은 값을 쓴다.
+func displayPercent(_ fraction: Double) -> Int {
+    Int((fraction * 100).rounded())
+}
+
 /// 추출 진행 상황.
 enum ExtractProgress: Sendable, Equatable {
     /// 내려받는 중. `fraction`은 0...1, 전체 크기를 모르면 nil.

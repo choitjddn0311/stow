@@ -22,6 +22,15 @@ enum VideoFormat: String, Sendable, CaseIterable {
         }
     }
 
+    /// 이 포맷이 가진 해상도로 맞춘다: 그대로 있으면 그대로, 없으면 그보다 낮은 것 중 가장 높은 것
+    /// (예: MP4에서 2160p·최고 → 1080p), 그것도 없으면 기본값.
+    func supportedResolution(near resolution: VideoResolution) -> VideoResolution {
+        if resolutions.contains(resolution) { return resolution }
+        let limit = resolution == .best ? Int.max : resolution.rawValue
+        return resolutions.filter { $0 != .best && $0.rawValue <= limit }.max { $0.rawValue < $1.rawValue }
+            ?? defaultResolution
+    }
+
     /// 처음 쓸 때의 해상도.
     var defaultResolution: VideoResolution {
         switch self {

@@ -294,7 +294,7 @@ struct ExtractQueueTests {
         #expect(engine.maxConcurrentExtractions == 1)
         #expect(queue.completedCount == 3)
         #expect(notifier.prepared)
-        #expect(notifier.completedTitles == ["3개 추출 완료"])
+        #expect(notifier.completedTitles == ["3개 저장 완료"])
         #expect(!queue.isRunning)
     }
 
@@ -475,12 +475,14 @@ struct AppSettingsTests {
         #expect(second.format == .flac)
     }
 
-    /// MP4에 없는 해상도(1080p 초과)는 고를 수 없다.
-    @Test func mp4IgnoresResolutionsAbove1080p() {
+    /// MP4에 없는 해상도(1080p 초과·최고)는 1080p로 맞춘다.
+    @Test func mp4ClampsResolutionsAbove1080p() {
         let settings = AppSettings(defaults: InMemoryDefaults())
         settings.select(.video(.mp4, .p720))
         settings.videoResolution = .p2160
-        #expect(settings.format == .video(.mp4, .p720))
+        #expect(settings.format == .video(.mp4, .p1080))
+        settings.select(.video(.mp4, .best))
+        #expect(settings.format == .video(.mp4, .p1080))
     }
 
     /// 실제 저장소(디스크)에 쓰고 새 객체로 다시 읽어도 유지된다. 다른 테스트는 메모리 저장소를 쓰므로 여기서만 진짜 저장소를 쓴다.
