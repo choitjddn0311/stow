@@ -10,6 +10,12 @@ source "$(dirname "$0")/lib/common.sh"
 out=${1:-$REPO_ROOT/build/site}
 [[ -f $REPO_ROOT/site/index.html && -f $REPO_ROOT/site/en/index.html ]] || die "site/index.html·site/en/index.html이 없습니다."
 
+# 지울 폴더가 저장소 안이면 build/ 아래만 허용한다(site/·저장소 전체를 지우지 않도록).
+mkdir -p "$out"
+out=$(cd "$out" && pwd -P)
+if [[ $out == "$REPO_ROOT" || $out == "$REPO_ROOT"/* ]] && [[ $out != "$REPO_ROOT"/build/* ]]; then
+  die "저장소 안에서는 build/ 아래 폴더만 쓸 수 있습니다: $out"
+fi
 rm -rf "$out"
 mkdir -p "$out/images"
 cp -R "$REPO_ROOT/site/." "$out/"

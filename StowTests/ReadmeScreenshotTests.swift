@@ -77,12 +77,9 @@ struct ReadmeScreenshotTests {
                 panel.setFrameOrigin(NSPoint(x: visible.midX - panel.frame.width / 2, y: visible.midY - panel.frame.height / 2))
                 try await Task.sleep(for: .milliseconds(500))
             }
-            let name = "panel-\(dark ? "dark" : "light")"
-            if #available(macOS 26.0, *) {
-                try await Self.screencapture(roundedPanel: panel, cornerRadius: QuickPanelView.cornerRadius, name: name)
-            } else {
-                try await Self.screencapture(window: panel, name: name)
-            }
+            try await Self.screencapture(
+                roundedPanel: panel, cornerRadius: QuickPanelView.cornerRadius, name: "panel-\(dark ? "dark" : "light")"
+            )
         } catch {
             model.dismiss()
             backdrop.close()
@@ -97,8 +94,6 @@ struct ReadmeScreenshotTests {
     // MARK: - 창 띄우고 찍기
 
     private func capture(_ view: some View, size: CGSize, dark: Bool, name: String) async throws {
-        let backdrop = Backdrop.show(dark: dark)
-        defer { backdrop.close() }
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -132,11 +127,16 @@ struct ReadmeScreenshotTests {
 
     /// 유리 패널은 창만 찍으면 뒤가 비치지 않아 회색 판으로 나오므로, 배경 위의 패널 영역을 찍은 뒤
     /// 패널 모양(둥근 모서리) 밖을 투명하게 지운다.
-    @available(macOS 26.0, *)
     private static func screencapture(roundedPanel panel: NSWindow, cornerRadius: CGFloat, name: String) async throws {
-        // 패널 창에는 유리 둘레에 그림자용 투명 여백이 있으므로 유리 자체의 영역을 찍는다.
-        let glass = try #require(Self.firstSubview(of: NSGlassEffectView.self, in: panel.contentView), "유리 뷰를 찾지 못함")
-        let rect = panel.convertToScreen(glass.convert(glass.bounds, to: nil))
+        // macOS 26+ 패널 창에는 유리 둘레에 그림자용 투명 여백이 있으므로 유리 자체의 영역을 찍는다.
+        // 그 전에는 둥근 반투명 재질이 창 전체다.
+        var shape = panel.contentView
+        if #available(macOS 26.0, *) {
+            shape = try #require(Self.firstSubview(of: NSGlassEffectView.self, in: panel.contentView), "유리 뷰를 찾지 못함")
+        }
+        let view = try #require(shape)
+        // 찍는 영역과 자르는 모양이 같은 픽셀에 맞도록 정수 좌표로 맞춘다.
+        let rect = panel.convertToScreen(view.convert(view.bounds, to: nil)).integral
         let screenHeight = NSScreen.screens.first?.frame.height ?? rect.maxY
         // screencapture -R은 왼쪽 위 원점이다.
         let region = "\(Int(rect.minX)),\(Int(screenHeight - rect.maxY)),\(Int(rect.width)),\(Int(rect.height))"
@@ -148,7 +148,7 @@ struct ReadmeScreenshotTests {
         let size = CGSize(width: source.width, height: source.height)
         let context = try #require(CGContext(
             data: nil, width: source.width, height: source.height, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            space: source.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ))
         // 패널과 같은 연속 곡률 모서리로 자른다.
         context.addPath(RoundedRectangle(cornerRadius: cornerRadius * scale, style: .continuous)

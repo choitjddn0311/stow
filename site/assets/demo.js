@@ -47,11 +47,13 @@
     const isYT = ["youtube.com", "youtu.be"].some(h => host === h || host.endsWith("." + h));
     if (!isYT || !/^https?:$/.test(u.protocol)) return { error: T.invalid };
     const path = u.pathname;
+    if (path.length <= 1) return { error: T.invalid };
     if (host.endsWith("youtu.be")) {
       const id = path.slice(1).split("/")[0];
       return /^[\w-]{11}$/.test(id) ? { video: id } : { error: T.unsupported };
     }
-    if (["/@", "/channel/", "/c/", "/user/", "/feed/"].some(p => path.startsWith(p))) return { error: T.channel };
+    const lower = path.toLowerCase();
+    if (["/@", "/channel/", "/c/", "/user/", "/feed/"].some(p => lower.startsWith(p))) return { error: T.channel };
     const v = u.searchParams.get("v");
     if (path === "/watch" && v && /^[\w-]{11}$/.test(v)) return { video: v };
     const m = path.match(/^\/(shorts|live|embed)\/([\w-]{11})/);
@@ -110,11 +112,19 @@
     go.disabled = false;
   }
 
-  // 앱의 파일 이름 규칙(FileNaming): 경로 문자 치환, 공백 정리, 앞의 점·공백 제거.
+  // 앱의 파일 이름 규칙(YtDlpClient.sanitize): 경로 문자 치환, 제어 문자는 공백, 공백 정리,
+  // 200바이트(UTF-8)까지 글자 단위로 자르기, 앞의 점·공백과 끝 공백 제거, 비면 "오디오".
+  const encoder = new TextEncoder();
+  const segmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
   function fileName(title) {
-    let name = title.replace(/[\/:]/g, "-").replace(/[\u0000-\u001f]/g, " ").split(/\s+/).filter(Boolean).join(" ");
-    name = name.replace(/^[. ]+/, "");
-    return name || "audio";
+    let name = title.replace(/[\/:]/g, "-").replace(/\p{Cc}/gu, " ").split(/\s+/).filter(Boolean).join(" ");
+    if (encoder.encode(name).length > 200) {
+      const chars = segmenter ? Array.from(segmenter.segment(name), s => s.segment) : Array.from(name);
+      while (chars.length && encoder.encode(chars.join("")).length > 200) chars.pop();
+      name = chars.join("");
+    }
+    name = name.replace(/^[. ]+/, "").replace(/ +$/, "");
+    return name || "오디오";
   }
 
   function setFormat(f) {
@@ -133,6 +143,7 @@
     const finish = () => {
       if (my !== run) return;
       show(job, false);
+      $("#demo-done .ok").textContent = T.saved;
       const name = fileName(current.title);
       file.textContent = current.playlist ? `${name}/  — ${T.folder}` : `${name}.${ext}`;
       show(done, true);
