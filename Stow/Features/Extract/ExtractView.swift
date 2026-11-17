@@ -304,26 +304,15 @@ private struct QueueRow: View {
     }
 
     /// 진행률을 알면 채워지는 막대, 모르면(준비·변환 중) 움직이는 막대.
-    /// 영상을 영상·오디오 스트림으로 나눠 받을 때는 두 칸(영상 → 오디오)으로 나눠 지금 단계를 보여 준다.
+    /// 영상을 영상·오디오 스트림으로 나눠 받을 때는 두 단계를 막대 하나에 이어서 채운다(어느 쪽을 받는지는 아래 문구).
     @ViewBuilder
     private var progressBar: some View {
         if case .downloading(let fraction?, _, _, let part) = item.progress.value {
-            if item.options.format.isVideo, part != .combined {
-                HStack(spacing: 4) {
-                    ProgressView(value: part == .video ? fraction : 1)
-                    ProgressView(value: part == .audio ? fraction : 0)
-                }
+            let overall = item.options.format.isVideo ? DownloadPart.overall(fraction, part: part) : fraction
+            ProgressView(value: overall)
                 .controlSize(.small)
-                .animation(Motion.progress(reduceMotion: reduceMotion), value: fraction)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(part == .video ? "영상 다운로드" : "오디오 다운로드")
-                .accessibilityValue("\(displayPercent(fraction))%")
-            } else {
-                ProgressView(value: fraction)
-                    .controlSize(.small)
-                    .animation(Motion.progress(reduceMotion: reduceMotion), value: fraction)
-                    .accessibilityLabel("다운로드")
-            }
+                .animation(Motion.progress(reduceMotion: reduceMotion), value: overall)
+                .accessibilityLabel(item.options.format.isVideo && part == .audio ? "오디오 다운로드" : "다운로드")
         } else {
             ProgressView()
                 .progressViewStyle(.linear)

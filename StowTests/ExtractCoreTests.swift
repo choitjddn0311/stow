@@ -301,6 +301,14 @@ struct VideoProgressTests {
         )
     }
 
+    @Test func overallProgressFillsOneBarAcrossParts() {
+        #expect(DownloadPart.overall(0, part: .video) == 0)
+        #expect(DownloadPart.overall(1, part: .video) == DownloadPart.videoShare)
+        #expect(DownloadPart.overall(0, part: .audio) == DownloadPart.videoShare)  // 영상이 끝난 자리에서 이어진다
+        #expect(DownloadPart.overall(1, part: .audio) == 1)
+        #expect(DownloadPart.overall(0.3, part: .combined) == 0.3)
+    }
+
     @Test func mergerIsMerging() {
         #expect(ProgressParser.parse("[stow:postprocess] started Merger") == .progress(.merging))
     }

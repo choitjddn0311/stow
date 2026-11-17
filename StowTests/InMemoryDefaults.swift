@@ -22,8 +22,18 @@ final class InMemoryDefaults: UserDefaults, @unchecked Sendable {
     private let lock = NSLock()
     private var values: [String: Any] = [:]
 
-    init() {
+    /// 테스트 기본 저장 폴더. 앱 기본값(사용자의 "다운로드")을 쓰면 재생목록을 대기열에 넣는 테스트가
+    /// 실제 다운로드 폴더에 재생목록 이름의 폴더를 만든다.
+    static let testOutputDirectory = FileManager.default.temporaryDirectory
+        .appending(path: "stow-tests-output", directoryHint: .isDirectory)
+
+    /// - Parameter keepAppDefaults: true면 저장 폴더도 비워 앱 기본값(다운로드 폴더)을 그대로 확인할 수 있게 한다.
+    init(keepAppDefaults: Bool = false) {
         super.init(suiteName: Self.backingSuiteName)!
+        if !keepAppDefaults {
+            try? FileManager.default.createDirectory(at: Self.testOutputDirectory, withIntermediateDirectories: true)
+            values["outputDirectory"] = Self.testOutputDirectory.path
+        }
     }
 
     override func object(forKey defaultName: String) -> Any? {

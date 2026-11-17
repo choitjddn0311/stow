@@ -421,7 +421,7 @@ struct ExtractQueueTests {
 @MainActor
 struct AppSettingsTests {
     @Test func defaults() {
-        let settings = AppSettings(defaults: InMemoryDefaults())
+        let settings = AppSettings(defaults: InMemoryDefaults(keepAppDefaults: true))
         #expect(settings.format == .mp3(.kbps320))
         #expect(settings.outputDirectory == AppSettings.defaultOutputDirectory)
         #expect(settings.acceptedNoticeVersion == 0)
@@ -523,7 +523,7 @@ struct AppSettingsTests {
     @Test func recentOutputDirectories() {
         let suite = InMemoryDefaults()
         let settings = AppSettings(defaults: suite)
-        #expect(settings.recentOutputDirectories.map(\.path) == [AppSettings.defaultOutputDirectory.path])
+        #expect(settings.recentOutputDirectories.map(\.path) == [InMemoryDefaults.testOutputDirectory.path])
 
         let folders = (1...6).map { URL(filePath: "/tmp/최근\($0)", directoryHint: .isDirectory) }
         for folder in folders { settings.outputDirectory = folder }

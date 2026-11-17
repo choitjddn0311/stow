@@ -15,6 +15,20 @@ func displayPercent(_ fraction: Double) -> Int {
     Int((fraction * 100).rounded())
 }
 
+extension DownloadPart {
+    /// 영상 스트림이 차지하는 몫. 영상이 오디오보다 훨씬 크므로(보통 10배 이상) 막대 하나에서 영상 단계를 길게 둔다.
+    static let videoShare = 0.85
+
+    /// 영상·오디오를 나눠 받을 때 이 단계의 진행률(0...1)을 전체 진행률로 바꾼다. 합쳐진 스트림은 그대로.
+    static func overall(_ fraction: Double, part: DownloadPart) -> Double {
+        switch part {
+        case .video: fraction * videoShare
+        case .audio: videoShare + fraction * (1 - videoShare)
+        case .combined: fraction
+        }
+    }
+}
+
 /// 추출 진행 상황.
 enum ExtractProgress: Sendable, Equatable {
     /// 내려받는 중. `fraction`은 0...1, 전체 크기를 모르면 nil.
