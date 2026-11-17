@@ -64,12 +64,16 @@ struct StowApp: App {
         // 창은 하나뿐이다(메뉴 막대·패널에서 "창 열기"가 새 창을 만들지 않고 이 창을 연다).
         Window("Stow", id: AppCoordinator.mainWindowID) {
             RootView(model: coordinator.mainModel, settings: settings, engineError: engineError)
-                .modifier(OpenMainWindowBinder(coordinator: coordinator))
+                .modifier(OpenWindowBinder(coordinator: coordinator))
         }
         .defaultSize(width: 600, height: 540)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .appInfo) {
+                // 메뉴 명령 안에서 환경의 openWindow를 읽으면, 열린 창이 없을 때 항목이 메뉴에서 사라진다(확인함).
+                // 그래서 메인 창처럼 코디네이터에 연결한 동작으로 연다.
+                Button("오픈소스 라이선스…") { coordinator.openLicensesWindow() }
+                Divider()
                 CheckForUpdatesButton(updater: updaterController.updater)
                 Divider()
                 Button("엔진 업데이트 확인…") { engineUpdates?.checkNow() }
@@ -83,13 +87,19 @@ struct StowApp: App {
             SettingsView()
         }
 
+        Window("오픈소스 라이선스", id: OpenSourceLicensesView.windowID) {
+            OpenSourceLicensesView()
+        }
+        .defaultSize(width: 760, height: 540)
+        .windowResizability(.contentMinSize)
+
         // 창을 닫아도 앱은 메뉴 막대에 남아 빠른 추출 단축키가 동작한다(사용자 결정 2026-11-14).
         MenuBarExtra {
             MenuBarMenu(coordinator: coordinator)
         } label: {
             Image(systemName: "waveform")
                 .accessibilityLabel("Stow")
-                .modifier(OpenMainWindowBinder(coordinator: coordinator))
+                .modifier(OpenWindowBinder(coordinator: coordinator))
         }
     }
 
@@ -107,14 +117,14 @@ struct StowApp: App {
 
 /// SwiftUI 환경의 `openWindow`를 코디네이터에 연결한다. 단축키·패널처럼 SwiftUI 밖에서 메인 창을 열 때 쓴다.
 /// 메뉴 막대 아이콘은 앱 시작부터 있으므로, 메인 창을 닫은 뒤에도 연결이 남는다.
-private struct OpenMainWindowBinder: ViewModifier {
+private struct OpenWindowBinder: ViewModifier {
     let coordinator: AppCoordinator
     @Environment(\.openWindow) private var openWindow
 
     func body(content: Content) -> some View {
         content.onAppear {
             let openWindow = openWindow
-            coordinator.openMainWindowAction = { openWindow(id: AppCoordinator.mainWindowID) }
+            coordinator.openWindowAction = { openWindow(id: $0) }
         }
     }
 }

@@ -39,7 +39,7 @@ Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영�
 
 ## 오픈소스 구성 요소
 
-앱 안에 아래 프로그램을 함께 넣어 실행합니다. 라이선스 원문은 앱의 `Contents/Resources/bin/licenses/`에 있습니다.
+앱 안에 아래 프로그램을 함께 넣어 실행합니다. 구성 요소와 라이선스 원문은 앱 메뉴 **Stow → 오픈소스 라이선스…**에서 볼 수 있습니다(원문 파일은 앱의 `Contents/Resources/bin/licenses/`와 `Contents/Resources/`).
 
 | 구성 요소 | 용도 | 라이선스 |
 |---|---|---|
@@ -49,12 +49,11 @@ Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영�
 | [FFmpeg](https://ffmpeg.org) | 오디오 변환 | LGPL 2.1 이상 |
 | [LAME](https://lame.sourceforge.io) | MP3 인코딩 | LGPL |
 | [Sparkle](https://sparkle-project.org) | 앱 자동 업데이트 | MIT (포함된 bsdiff·ed25519 등은 BSD·zlib 계열) |
-| [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | 빠른 추출 전역 단축키 | MIT (원문: 앱의 `Contents/Resources/KeyboardShortcuts-LICENSE.txt`) |
+| [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | 빠른 추출 전역 단축키 | MIT |
 
-FFmpeg와 LAME은 GPL 구성 없이 LGPL로 직접 빌드했습니다. 사용한 소스와 빌드 방법은
-[`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh)에 있고, 소스는
-[ffmpeg-9.0.2](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz)와
-[lame-3.100](https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz)입니다.
+FFmpeg와 LAME은 GPL 구성 없이 LGPL로 직접 빌드했습니다. 앱에 들어 있는 버전의 원본 소스(`ffmpeg-<버전>.tar.xz`, `lame-<버전>.tar.gz`)는
+각 버전의 [릴리스](https://github.com/choitjddn0311/stow/releases) Assets에 DMG와 함께 올려 두었고,
+빌드 방법은 같은 버전 소스 코드의 [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh)에 있습니다.
 
 ## 직접 빌드하기
 
