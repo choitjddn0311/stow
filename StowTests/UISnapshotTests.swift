@@ -62,7 +62,7 @@ struct UISnapshotTests {
 
     /// 엔진을 찾지 못했을 때, 이용 고지, 라이선스 창
     @Test func otherScreensRender() async throws {
-        let settings = AppSettings(defaults: try #require(UserDefaults(suiteName: "stow-snap-\(UUID().uuidString)")))
+        let settings = AppSettings(defaults: InMemoryDefaults())
         settings.acceptedNoticeVersion = UsageNotice.version
         for dark in [false, true] {
             let suffix = dark ? "dark" : "light"
@@ -71,7 +71,7 @@ struct UISnapshotTests {
             #expect(Self.distinctColorCount(in: brokenImage) > 10, "엔진 없음 화면이 비어 있음")
             Self.save(brokenImage, name: "engine-missing-\(suffix)")
 
-            let fresh = AppSettings(defaults: try #require(UserDefaults(suiteName: "stow-snap-\(UUID().uuidString)")))
+            let fresh = AppSettings(defaults: InMemoryDefaults())
             let notice = RootView(model: nil, settings: fresh)
             let noticeImage = try await Self.render(notice, width: 600, height: 540, dark: dark)
             #expect(Self.distinctColorCount(in: noticeImage) > 10, "이용 고지 화면이 비어 있음")
@@ -113,7 +113,7 @@ struct UISnapshotTests {
 
         @MainActor
         static func make(_ state: MainState) async throws -> Fixture {
-            let defaults = try #require(UserDefaults(suiteName: "stow-snap-\(UUID().uuidString)"))
+            let defaults = InMemoryDefaults()
             let settings = AppSettings(defaults: defaults)
             settings.acceptedNoticeVersion = UsageNotice.version
             let directory = FileManager.default.temporaryDirectory.appending(path: "stow-snapshots", directoryHint: .isDirectory)

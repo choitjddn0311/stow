@@ -42,7 +42,7 @@ struct UpdateReminderTests {
     }
 
     @Test func reminderReadsSavedStateAtLaunch() throws {
-        let defaults = try #require(UserDefaults(suiteName: "stow-reminder-\(UUID().uuidString)"))
+        let defaults = InMemoryDefaults()
         #expect(UpdateReminder(defaults: defaults, currentBuild: "5").pendingVersion == nil)
 
         defaults.set("6", forKey: "updateReminder.lastShownVersion")

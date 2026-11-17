@@ -22,7 +22,7 @@ private let samplePlaylist = Playlist(id: "PL1", title: "내 재생목록", entr
 
 @MainActor
 private func makeSettings() -> AppSettings {
-    let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+    let settings = AppSettings(defaults: InMemoryDefaults())
     settings.outputDirectory = testOutputDirectory
     return settings
 }
@@ -416,7 +416,7 @@ struct ExtractQueueTests {
 @MainActor
 struct AppSettingsTests {
     @Test func defaults() {
-        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        let settings = AppSettings(defaults: InMemoryDefaults())
         #expect(settings.format == .mp3(.kbps320))
         #expect(settings.outputDirectory == AppSettings.defaultOutputDirectory)
         #expect(settings.acceptedNoticeVersion == 0)
@@ -424,14 +424,14 @@ struct AppSettingsTests {
 
     /// 앱을 다시 실행해도(같은 저장소로 새로 만들어도) 설정이 유지된다.
     @Test func persistsAcrossInstances() {
-        let suite = "stow-test-\(UUID().uuidString)"
-        let first = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let suite = InMemoryDefaults()
+        let first = AppSettings(defaults: suite)
         first.formatKind = .flac
         first.mp3Bitrate = .kbps128
         first.outputDirectory = URL(filePath: "/tmp/저장 폴더", directoryHint: .isDirectory)
         first.acceptedNoticeVersion = UsageNotice.version
 
-        let second = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let second = AppSettings(defaults: suite)
         #expect(second.format == .flac)
         #expect(second.mp3Bitrate == .kbps128)
         #expect(second.outputDirectory.path == "/tmp/저장 폴더")
@@ -439,11 +439,10 @@ struct AppSettingsTests {
 
         second.formatKind = .mp3
         #expect(second.format == .mp3(.kbps128))  // WAV/FLAC을 거쳐도 MP3 음질은 기억한다
-        UserDefaults().removePersistentDomain(forName: suite)
     }
 
     @Test func selectFormat() {
-        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-test-\(UUID().uuidString)")!)
+        let settings = AppSettings(defaults: InMemoryDefaults())
         settings.select(.mp3(.kbps128))
         #expect(settings.formatKind == .mp3)
         #expect(settings.mp3Bitrate == .kbps128)
@@ -454,8 +453,8 @@ struct AppSettingsTests {
 
     /// 최근 저장 폴더: 지금 폴더가 맨 앞, 같은 폴더는 한 번, 최대 5개, 다시 실행해도 유지.
     @Test func recentOutputDirectories() {
-        let suite = "stow-test-\(UUID().uuidString)"
-        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let suite = InMemoryDefaults()
+        let settings = AppSettings(defaults: suite)
         #expect(settings.recentOutputDirectories.map(\.path) == [AppSettings.defaultOutputDirectory.path])
 
         let folders = (1...6).map { URL(filePath: "/tmp/최근\($0)", directoryHint: .isDirectory) }
@@ -468,10 +467,9 @@ struct AppSettingsTests {
         #expect(AppSettings.isSameDirectory(settings.recentOutputDirectories[0], folders[2]))
         #expect(settings.recentOutputDirectories.filter { AppSettings.isSameDirectory($0, folders[2]) }.count == 1)
 
-        let reopened = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let reopened = AppSettings(defaults: suite)
         #expect(reopened.recentOutputDirectories.count == 5)
         #expect(AppSettings.isSameDirectory(reopened.recentOutputDirectories[0], folders[2]))
-        UserDefaults().removePersistentDomain(forName: suite)
     }
 
     /// 심볼릭 링크로 가리킨 같은 폴더는 같은 폴더로 본다(/tmp → /private/tmp).
@@ -486,8 +484,8 @@ struct AppSettingsTests {
 
     /// 메뉴의 최근 폴더: 지금 폴더는 늘 보이고, 없어진 폴더는 뺀다.
     @Test func availableRecentsSkipMissingFolders() throws {
-        let suite = "stow-test-\(UUID().uuidString)"
-        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        let suite = InMemoryDefaults()
+        let settings = AppSettings(defaults: suite)
         let existing = FileManager.default.temporaryDirectory.appending(path: "stow-recent-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: existing, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: existing) }
@@ -501,7 +499,6 @@ struct AppSettingsTests {
         #expect(shown.contains { AppSettings.isSameDirectory($0, missingCurrent) })  // 지금 폴더는 없어도 보인다
         #expect(shown.contains { AppSettings.isSameDirectory($0, existing) })
         #expect(!shown.contains { AppSettings.isSameDirectory($0, missing) })
-        UserDefaults().removePersistentDomain(forName: suite)
     }
 
     @Test func durationFormat() {

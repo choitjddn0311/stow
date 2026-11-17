@@ -44,7 +44,7 @@ struct EngineUpdateCoordinatorTests {
         updater.fetcher = CoordinatorFakeFetcher(responses: responses)
         return Fixture(
             storage: storage,
-            defaults: UserDefaults(suiteName: "stow-coord-\(UUID().uuidString)")!,
+            defaults: InMemoryDefaults(),
             source: EngineSource(engine),
             updater: updater,
             recorder: Recorder()

@@ -36,7 +36,7 @@ struct StowSmokeTests {
     /// 빌드 산출물을 읽을 때, 저장소가 데스크탑 폴더에 있으면 macOS 권한 확인(TCC)에 걸려 테스트가 끝나지 않는다.
     @Test(arguments: [false, true])
     func rootViewRendersContent(noticeAccepted: Bool) throws {
-        let defaults = try #require(UserDefaults(suiteName: "stow-smoke-\(UUID().uuidString)"))
+        let defaults = InMemoryDefaults()
         let settings = AppSettings(defaults: defaults)
         settings.acceptedNoticeVersion = noticeAccepted ? UsageNotice.version : 0
         let engine = YtDlpClient(engine: try EngineLocator.bundled())
