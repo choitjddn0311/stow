@@ -68,11 +68,12 @@ struct YtDlpArguments: Sendable {
                 + sortArguments(resolution)
                 + ["--merge-output-format", "mp4"]
         case .video(.best, let resolution):
-            // 코덱과 관계없이 가장 좋은 영상(오디오 없는 스트림) + 오디오. HLS는 고르지 않는다.
-            // 담을 수 있는 형식 중 MP4를 먼저, 안 되면 WebM, 그다음 MKV.
-            ["--format", "bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]"]
-                + sortArguments(resolution)
-                + ["--merge-output-format", "mp4/webm/mkv"]
+            // 가장 높은 해상도의 영상(오디오 없는 스트림) + 오디오. HLS는 고르지 않는다.
+            // QuickTime에서 열리는 MP4가 되도록 오디오는 AAC(m4a)를, 같은 해상도면 영상은 AV1을 먼저 고른다
+            // (Opus·VP9는 MP4에 담기지 않아 WebM이 된다). 그래도 안 되면 WebM, 그다음 MKV.
+            ["--format", "bv[protocol!*=m3u8]+ba[ext=m4a][protocol!*=m3u8]/bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]",
+             "--format-sort", (resolution == .best ? "res" : "res:\(resolution.rawValue)") + ",vcodec:av01",
+             "--merge-output-format", "mp4/webm/mkv"]
         }
     }
 

@@ -669,7 +669,7 @@ extension VideoFormat {
     var note: String {
         switch self {
         case .mp4: "편집 프로그램(Premiere·Final Cut 등)에서 바로 열리는 H.264 MP4입니다. 유튜브가 1080p까지만 제공합니다."
-        case .best: "가장 높은 화질로 받습니다. 4K 이상은 VP9·AV1 코덱이라 일부 편집 프로그램에서 열리지 않을 수 있고, 파일 형식(MP4·WebM·MKV)은 영상에 따라 정해집니다."
+        case .best: "가장 높은 화질로 받습니다. 대부분 AV1 코덱의 MP4로, QuickTime에서는 M3 이후 Mac에서 열립니다. 일부 영상은 WebM·MKV로 받으며 IINA·VLC 같은 플레이어가 필요할 수 있습니다."
         }
     }
 }

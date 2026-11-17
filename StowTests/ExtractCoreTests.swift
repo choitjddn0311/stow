@@ -260,8 +260,9 @@ struct YtDlpArgumentsTests {
     @Test func bestQualityHasNoResolutionLimitAndFlexibleContainer() {
         let arguments = YtDlpArguments(engine: engine)
             .extract(URL(string: "https://youtu.be/abc")!, format: .video(.best, .best), workDirectory: URL(filePath: "/tmp/w"))
-        #expect(arguments.containsPair(["--format", "bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]"]))
-        #expect(!arguments.contains("--format-sort"))
+        #expect(arguments.containsPair(["--format", "bv[protocol!*=m3u8]+ba[ext=m4a][protocol!*=m3u8]/bv[protocol!*=m3u8]+ba[protocol!*=m3u8]/b[protocol!*=m3u8]"]))
+        // 해상도가 먼저(가장 높은 것), 같은 해상도면 AV1(MP4에 담김)
+        #expect(arguments.containsPair(["--format-sort", "res,vcodec:av01"]))
         #expect(arguments.containsPair(["--merge-output-format", "mp4/webm/mkv"]))
         #expect(!arguments.contains("--extract-audio"))
     }
@@ -269,7 +270,7 @@ struct YtDlpArgumentsTests {
     @Test func bestQualityWithResolutionSortsByIt() {
         let arguments = YtDlpArguments(engine: engine)
             .extract(URL(string: "https://youtu.be/abc")!, format: .video(.best, .p1440), workDirectory: URL(filePath: "/tmp/w"))
-        #expect(arguments.containsPair(["--format-sort", "res:1440"]))
+        #expect(arguments.containsPair(["--format-sort", "res:1440,vcodec:av01"]))
     }
 
     @Test func videoFormatErrors() {
