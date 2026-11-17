@@ -14,14 +14,26 @@ struct RootView: View {
             } else if let model {
                 ExtractView(model: model)
             } else {
-                Label(
-                    (engineError ?? .missingComponent("bin")).errorDescription ?? "",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundStyle(.red)
-                .padding(32)
+                EngineUnavailableView(error: engineError ?? .missingComponent("bin"))
             }
         }
         .frame(minWidth: 560, minHeight: 500)
+    }
+}
+
+/// 앱 안의 엔진을 찾지 못해 시작할 수 없을 때(앱이 손상됨). 무엇이 문제인지 알리고 다시 받을 곳을 연결한다.
+private struct EngineUnavailableView: View {
+    let error: EngineError
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Stow를 시작할 수 없습니다", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text(error.errorDescription ?? "앱 구성 요소를 찾지 못했습니다. 앱을 다시 설치해 주세요.")
+        } actions: {
+            Link("최신 버전 받기", destination: AppLinks.latestRelease)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(32)
     }
 }

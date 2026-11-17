@@ -26,7 +26,9 @@ struct QuickPanelView: View {
                     .focused($isFieldFocused)
                     .onSubmit { model.submit() }
                 if extract.isFetching {
-                    ProgressView().controlSize(.small)
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("영상 정보를 불러오는 중")
                 }
             }
             .padding(.horizontal, 18)
@@ -40,7 +42,7 @@ struct QuickPanelView: View {
 
             Divider().padding(.horizontal, 18)
 
-            HStack(spacing: 8) {
+            HStack(spacing: Metrics.controlSpacing) {
                 FormatChip(model: model)
                 FolderChip(model: model)
                 Spacer(minLength: 8)
@@ -153,44 +155,32 @@ private struct ContentRow: View {
             Text(addWhenReady ? "영상 정보를 불러오면 바로 대기열에 넣습니다…" : "영상 정보를 불러오는 중…")
                 .foregroundStyle(.secondary)
         case .video(let metadata):
-            HStack(spacing: 12) {
-                VideoThumbnail(url: metadata.thumbnailURL, width: 64, cornerRadius: 4)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(metadata.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .help(metadata.title)
-                    Text(detail(uploader: metadata.uploader, duration: metadata.duration))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                }
+            MediaSummary(title: metadata.title, titleLineLimit: 1) {
+                VideoThumbnail(url: metadata.thumbnailURL, width: Metrics.compactThumbnailWidth, cornerRadius: 4)
+            } details: {
+                Text(detail(uploader: metadata.uploader, duration: metadata.duration))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .accessibilityLabel(
+                        [metadata.uploader, metadata.duration.map(DurationFormat.spoken(from:))]
+                            .compactMap { $0 }.joined(separator: ", ")
+                    )
             }
             .accessibilityElement(children: .combine)
         case .playlist(let playlist):
-            HStack(spacing: 12) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 64, height: 36)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(playlist.title)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .help(playlist.title)
+            HStack(spacing: Metrics.controlSpacing) {
+                MediaSummary(title: playlist.title, titleLineLimit: 1) {
+                    PlaylistThumbnail(width: Metrics.compactThumbnailWidth, cornerRadius: 4)
+                } details: {
                     Text(playlistDetail(playlist))
-                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                         .lineLimit(1)
                 }
-                Spacer(minLength: 8)
                 Button("메인 창에서 고르기…", action: openInMainWindow)
+                    .fixedSize()
             }
         case .failed(let error):
-            Label(error.errorDescription ?? "오류가 발생했습니다.", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .lineLimit(2)
-                .help(error.errorDescription ?? "")
+            StatusMessage(error: error, lineLimit: 2)
         }
     }
 
