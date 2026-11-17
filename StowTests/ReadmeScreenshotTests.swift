@@ -10,10 +10,6 @@ import Testing
 /// - 실제 유튜브 영상·채널 대신 가상의 제목과 직접 그린 추상 썸네일을 쓴다(저작권·초상권 문제를 피하려고).
 /// - 실제 창(제목 막대·유리 패널)을 화면에 띄우고 뒤에 배경 창을 깐 뒤 그 영역을 캡처한다.
 ///   캡처에는 화면 기록 권한이 필요하다(터미널에서 실행할 때 터미널에 권한이 있어야 함).
-/// 스크린샷을 저장할 폴더(환경 변수 `TEST_RUNNER_STOW_README_SHOTS`). 없으면 이 테스트들을 건너뛴다.
-private let readmeShotsDirectory: URL? =
-    ProcessInfo.processInfo.environment["STOW_README_SHOTS"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
-
 @MainActor
 @Suite(.enabled(if: readmeShotsDirectory != nil), .serialized)
 struct ReadmeScreenshotTests {
@@ -30,20 +26,31 @@ struct ReadmeScreenshotTests {
             fixture.item("Piano Sketches Vol. 2", behavior: .wait),
         ]
         fixture.queue.add(items)
-        try await fixture.waitForRunning()
-        try await capture(
-            RootView(model: fixture.model, settings: fixture.settings),
-            size: CGSize(width: 600, height: 760), dark: dark, name: "main-\(dark ? "dark" : "light")"
-        )
+        do {
+            try await fixture.waitForRunning()
+            try await capture(
+                RootView(model: fixture.model, settings: fixture.settings),
+                size: CGSize(width: 600, height: 760), dark: dark, name: "main-\(dark ? "dark" : "light")"
+            )
+        } catch {
+            await fixture.tearDown()
+            throw error
+        }
         await fixture.tearDown()
     }
 
     @Test func playlistSelection() async throws {
         let fixture = try await Fixture.make(media: .playlist(Samples.playlist))
-        try await capture(
-            RootView(model: fixture.model, settings: fixture.settings),
-            size: CGSize(width: 600, height: 720), dark: false, name: "playlist-light"
-        )
+        #expect(fixture.model.stage == .playlist, "재생목록을 불러오지 못함")
+        do {
+            try await capture(
+                RootView(model: fixture.model, settings: fixture.settings),
+                size: CGSize(width: 600, height: 720), dark: false, name: "playlist-light"
+            )
+        } catch {
+            await fixture.tearDown()
+            throw error
+        }
         await fixture.tearDown()
     }
 
@@ -56,21 +63,26 @@ struct ReadmeScreenshotTests {
         defer { NSApp.appearance = nil }
         let backdrop = Backdrop.show(dark: dark)
         controller.show()
-        // 클립보드를 읽고 영상 정보를 불러올 때까지 기다린다.
-        for _ in 0..<300 where fixture.model.stage != .video {
-            try await Task.sleep(for: .milliseconds(10))
+        do {
+            // 클립보드를 읽고 영상 정보를 불러올 때까지 기다린다.
+            for _ in 0..<300 where fixture.model.stage != .video {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            try #require(fixture.model.stage == .video, "패널에서 영상 정보를 불러오지 못함")
+            try await Task.sleep(for: .milliseconds(800))
+            let panel = try #require(NSApp.windows.first { $0 is QuickPanel && $0.isVisible }, "패널이 뜨지 않음")
+            // 패널은 마우스가 있는 화면에 뜨므로, 배경을 깐 주 화면 가운데로 옮긴다(다른 화면의 바탕화면이 찍히지 않게).
+            if let visible = Self.screen?.visibleFrame {
+                panel.setFrameOrigin(NSPoint(x: visible.midX - panel.frame.width / 2, y: visible.midY - panel.frame.height / 2))
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            try await Self.screencapture(rect: panel.frame.insetBy(dx: -40, dy: -40), name: "panel-\(dark ? "dark" : "light")")
+        } catch {
+            model.dismiss()
+            backdrop.close()
+            await fixture.tearDown()
+            throw error
         }
-        try await Task.sleep(for: .milliseconds(800))
-        guard let panel = NSApp.windows.first(where: { $0 is QuickPanel && $0.isVisible }) else {
-            Issue.record("패널이 뜨지 않음")
-            return
-        }
-        // 패널은 마우스가 있는 화면에 뜨므로, 배경을 깐 주 화면 가운데로 옮긴다(다른 화면의 바탕화면이 찍히지 않게).
-        if let visible = Self.screen?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(x: visible.midX - panel.frame.width / 2, y: visible.midY - panel.frame.height / 2))
-            try await Task.sleep(for: .milliseconds(500))
-        }
-        try await Self.screencapture(rect: panel.frame.insetBy(dx: -40, dy: -40), name: "panel-\(dark ? "dark" : "light")")
         model.dismiss()
         backdrop.close()
         await fixture.tearDown()
@@ -80,6 +92,7 @@ struct ReadmeScreenshotTests {
 
     private func capture(_ view: some View, size: CGSize, dark: Bool, name: String) async throws {
         let backdrop = Backdrop.show(dark: dark)
+        defer { backdrop.close() }
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -90,6 +103,7 @@ struct ReadmeScreenshotTests {
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = NSHostingView(rootView: view)
         window.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
+        defer { window.close() }
         // 메뉴 막대·화면 가장자리에 걸리지 않게 화면 안쪽 가운데에 둔다(캡처 영역이 화면 밖으로 나가면 해상도가 떨어진다).
         if let visible = Self.screen?.visibleFrame {
             window.setFrameOrigin(NSPoint(x: visible.midX - window.frame.width / 2, y: visible.midY - window.frame.height / 2))
@@ -100,8 +114,6 @@ struct ReadmeScreenshotTests {
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(1200))
         try await Self.screencapture(rect: window.frame.insetBy(dx: -40, dy: -40), name: name)
-        window.close()
-        backdrop.close()
     }
 
     /// 찍을 화면: 주 화면(메뉴 막대가 있는 화면). 배경·창을 모두 여기에 둔다.
@@ -119,12 +131,24 @@ struct ReadmeScreenshotTests {
         // screencapture -R은 왼쪽 위 원점이다.
         let region = "\(Int(rect.minX)),\(Int(screenHeight - rect.maxY)),\(Int(rect.width)),\(Int(rect.height))"
         let image = directory.appending(path: "\(name).png")
+        let regionFile = directory.appending(path: "\(name).region")
         try? FileManager.default.removeItem(at: image)
-        try region.write(to: directory.appending(path: "\(name).region"), atomically: true, encoding: .utf8)
-        for _ in 0..<300 where !FileManager.default.fileExists(atPath: image.path) {
+        try region.write(to: regionFile, atomically: true, encoding: .utf8)
+        // 영역 파일이 남지 않게 한다(나중에 켠 스크립트가 다른 화면을 찍지 않도록).
+        defer { try? FileManager.default.removeItem(at: regionFile) }
+        // 스크립트는 영역 파일을 곧바로 가져간다. 3초 안에 가져가지 않으면 스크립트가 없는 것으로 보고 멈춘다.
+        for _ in 0..<30 where FileManager.default.fileExists(atPath: regionFile.path)
+            && !FileManager.default.fileExists(atPath: image.path) {
             try await Task.sleep(for: .milliseconds(100))
         }
-        #expect(FileManager.default.fileExists(atPath: image.path), "\(name).png를 찍지 못함(캡처 스크립트가 돌고 있는지 확인)")
+        for _ in 0..<100 where !FileManager.default.fileExists(atPath: image.path)
+            && !FileManager.default.fileExists(atPath: regionFile.path) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try #require(
+            FileManager.default.fileExists(atPath: image.path),
+            "\(name).png를 찍지 못함(터미널에서 캡처 스크립트가 돌고 있는지 확인)"
+        )
         try await Task.sleep(for: .milliseconds(300))
     }
 
@@ -135,13 +159,19 @@ struct ReadmeScreenshotTests {
         let queue: ExtractQueue
         let settings: AppSettings
         let engine: SampleEngine
+        let defaults: UserDefaults
+        let suiteName: String
         let options: ExtractOptions
 
         @MainActor
         static func make(media: FetchedMedia, fetchNow: Bool = true) async throws -> Fixture {
-            let settings = AppSettings(defaults: try #require(UserDefaults(suiteName: "stow-readme-\(UUID().uuidString)")))
+            // 실행마다 새 이름을 만들면 ~/Library/Preferences에 파일이 쌓이므로 고정된 이름 하나를 비워 가며 쓴다.
+            let suiteName = "stow-readme-screenshots"
+            let defaults = try #require(UserDefaults(suiteName: suiteName))
+            defaults.removePersistentDomain(forName: suiteName)
+            let settings = AppSettings(defaults: defaults)
             settings.acceptedNoticeVersion = UsageNotice.version
-            // 화면에는 "~/Music/Stow"처럼 보이게, 실제로 있는 폴더를 쓴다.
+            // 화면에 "~/Music"으로 보이게, 실제로 있는 폴더를 쓴다(폴더가 없으면 추출이 실패로 표시된다).
             let music = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Music", directoryHint: .isDirectory)
             settings.outputDirectory = music
             settings.formatKind = .mp3
@@ -159,7 +189,7 @@ struct ReadmeScreenshotTests {
                 await model.waitForTask()
             }
             return Fixture(
-                model: model, queue: queue, settings: settings, engine: engine,
+                model: model, queue: queue, settings: settings, engine: engine, defaults: defaults, suiteName: suiteName,
                 options: ExtractOptions(format: .mp3(.kbps320), outputDirectory: FileManager.default.temporaryDirectory)
             )
         }
@@ -174,12 +204,18 @@ struct ReadmeScreenshotTests {
             for _ in 0..<300 where !(queue.items.contains { $0.status == .running && $0.progress.value != nil }) {
                 try await Task.sleep(for: .milliseconds(10))
             }
+            try #require(
+                queue.items.contains { $0.status == .running && $0.progress.value != nil },
+                "추출 중 상태를 만들지 못함"
+            )
         }
 
+        /// 작업을 멈추고 테스트 설정을 비운다(설정 파일은 고정 이름 하나만 남는다).
         @MainActor
         func tearDown() async {
             model.cancelFetch()
             await queue.cancelAndWait()
+            defaults.removePersistentDomain(forName: suiteName)
         }
     }
 
@@ -202,6 +238,11 @@ struct ReadmeScreenshotTests {
         }
     }
 }
+
+/// 스크린샷을 저장할 폴더(xcodebuild에 `TEST_RUNNER_STOW_README_SHOTS`로 주면 테스트에는 `STOW_README_SHOTS`로 보인다).
+/// 없으면 이 테스트들을 건너뛴다.
+private let readmeShotsDirectory: URL? =
+    ProcessInfo.processInfo.environment["STOW_README_SHOTS"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
 
 // MARK: - 예시 데이터
 
@@ -271,7 +312,8 @@ private final class SampleEngine: AudioExtracting, @unchecked Sendable {
     init(media: FetchedMedia) { self.media = media }
 
     func setBehavior(_ behavior: Behavior, for title: String) {
-        lock.withLock { behaviors[FileNaming.sanitize(title)] = behavior }
+        // 대기열은 항목 제목을 그대로 fileName으로 넘긴다.
+        lock.withLock { behaviors[title] = behavior }
     }
 
     func fetchMedia(for url: URL) async throws -> FetchedMedia { media }
