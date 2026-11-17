@@ -49,7 +49,7 @@ BUNDLE_ID=$(setting PRODUCT_BUNDLE_IDENTIFIER)
   || die "버전·빌드 번호·최소 macOS·번들 ID를 빌드 설정에서 읽지 못했습니다."
 TAG="v$VERSION"
 DMG="$OUT/Stow-$VERSION.dmg"
-# LGPL 구성 요소의 원본 소스(build-ffmpeg.sh가 체크섬을 검증해 복사). 앱의 "오픈소스 라이선스" 창이 이 릴리스를 가리킨다.
+# LGPL 구성 요소의 원본 소스(fetch-lgpl-sources.sh가 체크섬을 검증해 복사). 앱의 "오픈소스 라이선스" 창이 이 릴리스를 가리킨다.
 SOURCES="$OUT/sources"
 FFMPEG_VERSION=$(awk -F= '/^FFMPEG_VERSION=/{print $2}' scripts/build-ffmpeg.sh)
 LAME_VERSION=$(awk -F= '/^LAME_VERSION=/{print $2}' scripts/build-ffmpeg.sh)
@@ -203,8 +203,12 @@ leaked=$(grep -rlaiF -e "$REPO_ROOT" -e "$HOME/" "$APP" || true)
 [[ -z $leaked ]] || die "앱에 로컬 경로가 남아 있습니다:$(printf '\n%s' "$leaked" | head -4)"
 [[ -d $APP/Contents/Frameworks/Sparkle.framework ]] || die "앱에 Sparkle.framework가 없습니다."
 [[ $(plutil -extract SUPublicEDKey raw "$APP/Contents/Info.plist" 2>/dev/null) != "" ]] || die "Info.plist에 SUPublicEDKey가 없습니다."
-# 오픈소스 라이선스 원문(앱의 "오픈소스 라이선스" 창). Sparkle 원문은 저장소에 복사해 두므로 Sparkle을 올리면 같이 바꾼다.
-for f in KeyboardShortcuts-LICENSE.txt Sparkle-LICENSE.txt bin/licenses/ffmpeg-COPYING.LGPLv2.1.txt bin/licenses/lame-COPYING.txt; do
+# 오픈소스 라이선스 원문(앱의 "오픈소스 라이선스" 창): 엔진 원문 전체(engine/licenses)와 패키지 원문.
+# 창의 목록이 번들 원문을 모두 담는지는 단위 테스트가 확인한다. Sparkle 원문은 저장소에 복사해 두므로 Sparkle을 올리면 같이 바꾼다.
+for f in "$LICENSES_DIR"/*; do
+  [[ -s $BIN/licenses/$(basename "$f") ]] || die "앱에 엔진 라이선스 원문이 없습니다: $(basename "$f")"
+done
+for f in KeyboardShortcuts-LICENSE.txt Sparkle-LICENSE.txt; do
   [[ -s $APP/Contents/Resources/$f ]] || die "앱에 라이선스 원문이 없습니다: $f"
 done
 cmp -s "$APP/Contents/Resources/Sparkle-LICENSE.txt" "$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/LICENSE" \
@@ -236,7 +240,7 @@ cat "$DMG.sha256" >&2
 
 # 4b. LGPL 소스(FFmpeg·LAME 원본, 체크섬 검증)
 log "LGPL 소스 모으기"
-scripts/build-ffmpeg.sh --sources "$SOURCES"
+scripts/fetch-lgpl-sources.sh "$SOURCES"
 [[ -s $SOURCES/$FFMPEG_SOURCE && -s $SOURCES/$LAME_SOURCE ]] || die "LGPL 소스를 모으지 못했습니다: $SOURCES"
 
 # 5. Sparkle: DMG에 EdDSA 서명 → appcast.xml 생성·서명 → 둘 다 검증

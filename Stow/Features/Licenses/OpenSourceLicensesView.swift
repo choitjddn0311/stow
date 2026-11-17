@@ -36,8 +36,10 @@ private struct ComponentDetail: View {
     let component: OpenSourceComponent
     @State private var fileIndex = 0
 
-    private var file: OpenSourceComponent.LicenseFile { component.licenseFiles[fileIndex] }
-    private var fileURL: URL? { file.url(in: .main) }
+    private var fileURL: URL? {
+        guard component.licenseFiles.indices.contains(fileIndex) else { return nil }
+        return component.licenseFiles[fileIndex].url(in: .main)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -98,14 +100,14 @@ private struct ComponentDetail: View {
 private struct SourceNotice: View {
     let name: String
 
-    private var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    private var version: String? {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
     }
 
     var body: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Stow에 들어 있는 \(name)은 GPL 구성 없이 LGPL로 직접 빌드했습니다. 원본 소스는 이 버전(\(version))의 릴리스 페이지에서, 빌드 방법은 같은 버전 소스 코드의 scripts/build-ffmpeg.sh에서 볼 수 있습니다.")
+                Text("Stow에 들어 있는 \(name)은 GPL 구성 없이 LGPL로 직접 빌드했습니다. 원본 소스는 이 버전(\(version ?? "알 수 없음"))의 릴리스 페이지에서, 빌드 방법은 같은 버전 소스 코드의 scripts/build-ffmpeg.sh에서 볼 수 있습니다.")
                 Link("소스 코드 받기", destination: OpenSourceComponent.sourceReleaseURL(version: version))
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -77,8 +77,11 @@ struct OpenSourceComponent: Identifiable, Hashable, Sendable {
     }
 
     /// 이 버전 앱의 GitHub 릴리스 페이지. LGPL 구성 요소의 원본 소스를 DMG와 같은 곳에 올린다.
-    static func sourceReleaseURL(version: String) -> URL {
-        URL(string: "https://github.com/choitjddn0311/stow/releases/tag/v\(version)")!
+    /// 버전을 모르면(또는 형식이 다르면) 릴리스 목록으로 보낸다. 아직 공개하지 않은 버전(개발 빌드)은 페이지가 없다.
+    static func sourceReleaseURL(version: String?) -> URL {
+        let releases = "https://github.com/choitjddn0311/stow/releases"
+        guard let version, version.wholeMatch(of: /\d+(\.\d+)*/) != nil else { return URL(string: releases)! }
+        return URL(string: "\(releases)/tag/v\(version)")!
     }
 }
 

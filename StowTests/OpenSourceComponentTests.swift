@@ -49,5 +49,12 @@ struct OpenSourceComponentTests {
             OpenSourceComponent.sourceReleaseURL(version: "0.5.0").absoluteString
                 == "https://github.com/choitjddn0311/stow/releases/tag/v0.5.0"
         )
+        // 버전을 모르거나 형식이 다르면 릴리스 목록으로
+        for version in [nil, "", "0.5.0 beta", "../x"] as [String?] {
+            #expect(
+                OpenSourceComponent.sourceReleaseURL(version: version).absoluteString
+                    == "https://github.com/choitjddn0311/stow/releases"
+            )
+        }
     }
 }
