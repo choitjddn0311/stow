@@ -107,8 +107,9 @@ struct ExtractView: View {
             HStack(spacing: Metrics.controlSpacing) {
                 StatusMessage(error: error)
                 Spacer(minLength: 0)
-                if error.isWorthRetrying, model.canFetch {
-                    Button("다시 시도") { model.fetch() }
+                // 유튜브 차단은 알림창이 "다시 시도"를 띄우므로 여기서는 보여 주지 않는다.
+                if error.isWorthRetrying, error != .blockedByYouTube, model.canFetch {
+                    Button("다시 시도") { model.retryFetch() }
                 }
             }
         case .video(let metadata):
@@ -207,10 +208,10 @@ private struct PlaylistSection: View {
     let playlist: Playlist
     @Bindable var model: ExtractViewModel
 
+    /// 선택 여부는 체크박스가 알리므로 길이나 "볼 수 없음"만 덧붙인다.
     private func entryAccessibilityValue(_ entry: PlaylistEntry) -> String {
-        let selected = model.selectedEntryIDs.contains(entry.id) ? "선택됨" : "선택 안 됨"
-        if entry.isUnavailable { return "\(selected), 볼 수 없음" }
-        return entry.duration.map { "\(selected), \(DurationFormat.spoken(from: $0))" } ?? selected
+        if entry.isUnavailable { return "볼 수 없음" }
+        return entry.duration.map(DurationFormat.spoken(from:)) ?? ""
     }
 
     var body: some View {
@@ -282,6 +283,7 @@ private struct QueueRow: View {
                 Text(item.title)
                     .lineLimit(1)
                     .help(item.title)
+                    .accessibilityHidden(true)  // 행 이름으로 이미 읽는다
                 if item.status == .running {
                     progressBar
                 }
@@ -321,6 +323,7 @@ private struct QueueRow: View {
         Image(systemName: statusSymbol)
             .foregroundStyle(statusTint)
             .contentTransition(.symbolEffect(.replace))
+            .animation(Motion.stateChange(reduceMotion: reduceMotion), value: statusSymbol)
     }
 
     private var statusSymbol: String {
@@ -515,10 +518,11 @@ private struct OutputSection: View {
 }
 
 extension EngineError {
-    /// 같은 주소로 다시 해 볼 만한 오류(일시적인 문제). 주소가 틀렸거나 볼 수 없는 영상은 다시 해도 같다.
+    /// 같은 주소로 다시 해 볼 만한 오류(일시적인 문제). 주소가 틀렸거나 볼 수 없는 영상, 엔진을 실행하지 못한 경우
+    /// (`launchFailed`·`missingComponent`: 앱을 다시 설치해야 함)는 다시 해도 같다.
     var isWorthRetrying: Bool {
         switch self {
-        case .network, .blockedByYouTube, .metadataUnreadable, .launchFailed, .unknown:
+        case .network, .blockedByYouTube, .metadataUnreadable, .unknown:
             true
         default:
             false

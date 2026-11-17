@@ -67,11 +67,15 @@ struct UISnapshotTests {
         for dark in [false, true] {
             let suffix = dark ? "dark" : "light"
             let broken = RootView(model: nil, settings: settings, engineError: .missingComponent("bin/yt-dlp"))
-            Self.save(try await Self.render(broken, width: 600, height: 540, dark: dark), name: "engine-missing-\(suffix)")
+            let brokenImage = try await Self.render(broken, width: 600, height: 540, dark: dark)
+            #expect(Self.distinctColorCount(in: brokenImage) > 10, "엔진 없음 화면이 비어 있음")
+            Self.save(brokenImage, name: "engine-missing-\(suffix)")
 
             let fresh = AppSettings(defaults: try #require(UserDefaults(suiteName: "stow-snap-\(UUID().uuidString)")))
             let notice = RootView(model: nil, settings: fresh)
-            Self.save(try await Self.render(notice, width: 600, height: 540, dark: dark), name: "notice-\(suffix)")
+            let noticeImage = try await Self.render(notice, width: 600, height: 540, dark: dark)
+            #expect(Self.distinctColorCount(in: noticeImage) > 10, "이용 고지 화면이 비어 있음")
+            Self.save(noticeImage, name: "notice-\(suffix)")
 
             let licenses = try await Self.render(OpenSourceLicensesView(), width: 760, height: 540, dark: dark)
             #expect(Self.distinctColorCount(in: licenses) > 10)
@@ -85,6 +89,8 @@ struct UISnapshotTests {
         #expect(!EngineError.invalidURL.isWorthRetrying)
         #expect(!EngineError.privateVideo.isWorthRetrying)
         #expect(!EngineError.channelNotSupported.isWorthRetrying)
+        #expect(!EngineError.launchFailed(executable: "yt-dlp", code: 13).isWorthRetrying)
+        #expect(!EngineError.missingComponent("bin").isWorthRetrying)
     }
 
     @Test func spokenDuration() {
@@ -158,11 +164,14 @@ struct UISnapshotTests {
                 for _ in 0..<300 where queue.items[2].progress.value == nil {
                     try? await Task.sleep(for: .milliseconds(10))
                 }
+                #expect(queue.items[2].status == .running, "추출 중 상태를 만들지 못함")
+                #expect(queue.completedCount == 1 && queue.failedCount == 1, "완료·실패 상태를 만들지 못함")
             case .paused:
                 queue.add([item("blocked 막힌 곡"), item("대기 중인 곡")])
                 for _ in 0..<300 where !queue.isPaused {
                     try? await Task.sleep(for: .milliseconds(10))
                 }
+                #expect(queue.isPaused, "일시 정지 상태를 만들지 못함")
             }
             return Fixture(model: model, settings: settings, engine: engine)
         }
@@ -177,7 +186,10 @@ struct UISnapshotTests {
     // MARK: - 그리기
 
     private static func render(_ view: some View, width: CGFloat, height: CGFloat, dark: Bool) async throws -> CGImage {
-        let hosting = NSHostingView(rootView: view.frame(width: width, height: height))
+        // 실제 창처럼 창 배경색을 깐다(배경이 없는 화면은 투명 위에 그려져 다크 모드 글자가 안 보인다).
+        let hosting = NSHostingView(
+            rootView: view.frame(width: width, height: height).background(Color(nsColor: .windowBackgroundColor))
+        )
         let frame = NSRect(x: 0, y: 0, width: width, height: height)
         // 화면에 띄우지 않는 창에 넣어 실제 창과 같은 배율·모양으로 그린다.
         let window = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)

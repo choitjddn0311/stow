@@ -25,15 +25,13 @@ struct RootView: View {
 private struct EngineUnavailableView: View {
     let error: EngineError
 
-    private static let releasesURL = URL(string: "https://github.com/choitjddn0311/stow/releases/latest")!
-
     var body: some View {
         ContentUnavailableView {
             Label("Stow를 시작할 수 없습니다", systemImage: "exclamationmark.triangle")
         } description: {
             Text(error.errorDescription ?? "앱 구성 요소를 찾지 못했습니다. 앱을 다시 설치해 주세요.")
         } actions: {
-            Link("최신 버전 받기", destination: Self.releasesURL)
+            Link("최신 버전 받기", destination: AppLinks.latestRelease)
                 .buttonStyle(.borderedProminent)
         }
         .padding(32)

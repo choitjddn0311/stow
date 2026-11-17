@@ -161,6 +161,10 @@ private struct ContentRow: View {
                 Text(detail(uploader: metadata.uploader, duration: metadata.duration))
                     .monospacedDigit()
                     .lineLimit(1)
+                    .accessibilityLabel(
+                        [metadata.uploader, metadata.duration.map(DurationFormat.spoken(from:))]
+                            .compactMap { $0 }.joined(separator: ", ")
+                    )
             }
             .accessibilityElement(children: .combine)
         case .playlist(let playlist):

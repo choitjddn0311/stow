@@ -97,15 +97,19 @@ struct MediaSummary<Thumbnail: View, Details: View>: View {
     }
 }
 
-/// 영상 정보를 불러오는 동안의 자리표시(불러온 뒤와 같은 크기라 화면이 밀리지 않는다).
+/// 영상 정보를 불러오는 동안의 자리표시. 메인 창 영상 행과 같은 줄 수(제목 2줄·채널·길이)라
+/// 긴 제목의 영상을 불러와도 아래 내용이 거의 밀리지 않는다. 영상인지 재생목록인지 아직 모르므로 중립 모양을 쓴다.
 struct MediaSummaryPlaceholder: View {
     let thumbnailWidth: CGFloat
 
     var body: some View {
-        MediaSummary(title: "영상 제목을 불러오는 중입니다", titleLineLimit: 1) {
-            PlaylistThumbnail(width: thumbnailWidth).opacity(0.6)
+        MediaSummary(title: "영상 제목을 불러오는 중입니다 영상 제목을 불러오는 중입니다 영상 제목", titleLineLimit: 2) {
+            ThumbnailPlaceholder(symbol: "rectangle", width: thumbnailWidth)
+                .modifier(ThumbnailFrame(width: thumbnailWidth, cornerRadius: 6))
+                .opacity(0.6)
         } details: {
-            Text("채널 이름 · 0:00")
+            Text("채널 이름")
+            Text("0:00")
         }
         .redacted(reason: .placeholder)
         .accessibilityHidden(true)
