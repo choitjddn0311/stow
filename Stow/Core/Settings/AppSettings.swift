@@ -1,7 +1,19 @@
 import Foundation
 import Observation
 
-/// 포맷 종류(화면의 포맷 선택에 쓴다). MP3 음질은 따로 기억한다.
+/// 받을 종류: 오디오 추출 또는 영상 다운로드.
+enum MediaKind: String, CaseIterable, Sendable {
+    case audio, video
+
+    var displayName: String {
+        switch self {
+        case .audio: "오디오"
+        case .video: "영상"
+        }
+    }
+}
+
+/// 오디오 포맷 종류(화면의 포맷 선택에 쓴다). MP3 음질은 따로 기억한다.
 enum AudioFormatKind: String, CaseIterable, Sendable {
     case mp3, wav, flac
 
@@ -22,6 +34,10 @@ final class AppSettings {
         static let outputDirectory = "outputDirectory"
         static let formatKind = "formatKind"
         static let mp3Bitrate = "mp3Bitrate"
+        static let mediaKind = "mediaKind"
+        static let videoFormat = "videoFormat"
+        static let mp4Resolution = "mp4Resolution"
+        static let bestResolution = "bestResolution"
         static let acceptedNoticeVersion = "acceptedNoticeVersion"
         static let recentOutputDirectories = "recentOutputDirectories"
     }
@@ -63,6 +79,12 @@ final class AppSettings {
     /// 저장 위치가 바뀔 때만 계산해 둔다.
     private(set) var outputFolderName: String
 
+    /// 오디오와 영상 중 무엇을 받을지. 오디오 포맷과 영상 포맷은 각각 따로 기억한다.
+    var mediaKind: MediaKind {
+        didSet { defaults.set(mediaKind.rawValue, forKey: Keys.mediaKind) }
+    }
+
+    /// 오디오 포맷(MP3·WAV·FLAC). 영상을 고른 동안에도 유지한다.
     var formatKind: AudioFormatKind {
         didSet { defaults.set(formatKind.rawValue, forKey: Keys.formatKind) }
     }
@@ -70,6 +92,37 @@ final class AppSettings {
     /// MP3를 고를 때 쓸 음질. WAV·FLAC을 골랐다가 MP3로 돌아와도 유지한다.
     var mp3Bitrate: MP3Bitrate {
         didSet { defaults.set(mp3Bitrate.rawValue, forKey: Keys.mp3Bitrate) }
+    }
+
+    var videoFormat: VideoFormat {
+        didSet { defaults.set(videoFormat.rawValue, forKey: Keys.videoFormat) }
+    }
+
+    /// 영상 포맷마다 따로 기억하는 해상도(MP4는 1080p가 상한이라 둘을 나눈다).
+    private(set) var mp4Resolution: VideoResolution {
+        didSet { defaults.set(mp4Resolution.rawValue, forKey: Keys.mp4Resolution) }
+    }
+
+    private(set) var bestResolution: VideoResolution {
+        didSet { defaults.set(bestResolution.rawValue, forKey: Keys.bestResolution) }
+    }
+
+    /// 지금 고른 영상 포맷의 해상도.
+    var videoResolution: VideoResolution {
+        get {
+            switch videoFormat {
+            case .mp4: mp4Resolution
+            case .best: bestResolution
+            }
+        }
+        set {
+            // 그 포맷에 없는 해상도(예: MP4 2160p)는 무시한다.
+            guard videoFormat.resolutions.contains(newValue) else { return }
+            switch videoFormat {
+            case .mp4: mp4Resolution = newValue
+            case .best: bestResolution = newValue
+            }
+        }
     }
 
     /// 동의한 이용 고지 버전. 0이면 아직 동의하지 않았다.
@@ -88,11 +141,33 @@ final class AppSettings {
         recentOutputDirectories = Self.recents(adding: directory, to: storedRecents)
         formatKind = defaults.string(forKey: Keys.formatKind).flatMap(AudioFormatKind.init(rawValue:)) ?? .mp3
         mp3Bitrate = MP3Bitrate(rawValue: defaults.integer(forKey: Keys.mp3Bitrate)) ?? .kbps320
+        // 영상 기능 전의 설정에는 값이 없으므로 오디오로 시작한다.
+        mediaKind = defaults.string(forKey: Keys.mediaKind).flatMap(MediaKind.init(rawValue:)) ?? .audio
+        videoFormat = defaults.string(forKey: Keys.videoFormat).flatMap(VideoFormat.init(rawValue:)) ?? .mp4
+        mp4Resolution = Self.storedResolution(defaults, key: Keys.mp4Resolution, for: .mp4)
+        bestResolution = Self.storedResolution(defaults, key: Keys.bestResolution, for: .best)
         acceptedNoticeVersion = defaults.integer(forKey: Keys.acceptedNoticeVersion)
     }
 
+    private static func storedResolution(_ defaults: UserDefaults, key: String, for format: VideoFormat) -> VideoResolution {
+        // 값이 없으면 integer(forKey:)가 0(= best)을 돌려주므로 키가 있을 때만 읽는다.
+        guard defaults.object(forKey: key) != nil,
+              let value = VideoResolution(rawValue: defaults.integer(forKey: key)),
+              format.resolutions.contains(value)
+        else { return format.defaultResolution }
+        return value
+    }
+
     /// 선택한 포맷.
-    var format: AudioFormat {
+    var format: OutputFormat {
+        switch mediaKind {
+        case .audio: audioFormat
+        case .video: .video(videoFormat, videoResolution)
+        }
+    }
+
+    /// 종류와 관계없이 지금 고른 오디오 포맷.
+    var audioFormat: OutputFormat {
         switch formatKind {
         case .mp3: .mp3(mp3Bitrate)
         case .wav: .wav
@@ -100,14 +175,23 @@ final class AppSettings {
         }
     }
 
-    /// 포맷을 한 번에 고른다(MP3면 음질도 함께 바뀐다).
-    func select(_ format: AudioFormat) {
+    /// 포맷을 한 번에 고른다(종류·MP3 음질·영상 해상도도 함께 바뀐다).
+    func select(_ format: OutputFormat) {
         switch format {
         case .mp3(let bitrate):
             mp3Bitrate = bitrate
             formatKind = .mp3
-        case .wav: formatKind = .wav
-        case .flac: formatKind = .flac
+            mediaKind = .audio
+        case .wav:
+            formatKind = .wav
+            mediaKind = .audio
+        case .flac:
+            formatKind = .flac
+            mediaKind = .audio
+        case .video(let video, let resolution):
+            videoFormat = video
+            videoResolution = resolution
+            mediaKind = .video
         }
     }
 

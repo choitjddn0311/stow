@@ -238,12 +238,84 @@ struct YtDlpArgumentsTests {
         #expect(arguments.contains("--embed-metadata"))
     }
 
-    @Test(arguments: [AudioFormat.wav, .flac])
-    func losslessFormatsHaveNoQuality(_ format: AudioFormat) {
+    @Test(arguments: [OutputFormat.wav, .flac])
+    func losslessFormatsHaveNoQuality(_ format: OutputFormat) {
         let arguments = YtDlpArguments(engine: engine)
             .extract(URL(string: "https://youtu.be/abc")!, format: format, workDirectory: URL(filePath: "/tmp/w"))
-        #expect(arguments.containsPair(["--audio-format", format.fileExtension]))
+        #expect(arguments.containsPair(["--audio-format", format.fileExtension ?? ""]))
         #expect(!arguments.contains("--audio-quality"))
+    }
+
+    @Test func mp4PicksH264AndMergesWithoutAudioExtraction() {
+        let arguments = YtDlpArguments(engine: engine)
+            .extract(URL(string: "https://youtu.be/abc")!, format: .video(.mp4, .p720), workDirectory: URL(filePath: "/tmp/w"))
+        #expect(arguments.containsPair(["--format", "bv*[vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]"]))
+        #expect(arguments.containsPair(["--format-sort", "res:720"]))
+        #expect(arguments.containsPair(["--merge-output-format", "mp4"]))
+        #expect(!arguments.contains("--extract-audio"))
+        #expect(!arguments.contains("--audio-format"))
+        #expect(arguments.contains("--embed-metadata"))
+    }
+
+    @Test func bestQualityHasNoResolutionLimitAndFlexibleContainer() {
+        let arguments = YtDlpArguments(engine: engine)
+            .extract(URL(string: "https://youtu.be/abc")!, format: .video(.best, .best), workDirectory: URL(filePath: "/tmp/w"))
+        #expect(arguments.containsPair(["--format", "bv*+ba/b"]))
+        #expect(!arguments.contains("--format-sort"))
+        #expect(arguments.containsPair(["--merge-output-format", "mp4/webm/mkv"]))
+        #expect(!arguments.contains("--extract-audio"))
+    }
+
+    @Test func bestQualityWithResolutionSortsByIt() {
+        let arguments = YtDlpArguments(engine: engine)
+            .extract(URL(string: "https://youtu.be/abc")!, format: .video(.best, .p1440), workDirectory: URL(filePath: "/tmp/w"))
+        #expect(arguments.containsPair(["--format-sort", "res:1440"]))
+    }
+
+    @Test func fileExtensions() {
+        #expect(OutputFormat.video(.mp4, .p1080).fileExtension == "mp4")
+        #expect(OutputFormat.video(.best, .best).fileExtension == nil)  // 결과 파일 확장자를 쓴다
+        #expect(OutputFormat.flac.fileExtension == "flac")
+    }
+}
+
+struct VideoProgressTests {
+    @Test(arguments: [
+        ("avc1.640028 none", DownloadPart.video),
+        ("none mp4a.40.2", DownloadPart.audio),
+        ("avc1.42001E mp4a.40.2", DownloadPart.combined),
+    ])
+    func downloadPartFromCodecs(_ codecs: String, _ part: DownloadPart) {
+        #expect(
+            ProgressParser.parse("[stow:download] downloading 50 100 NA NA NA \(codecs)")
+                == .progress(.downloading(fraction: 0.5, bytesPerSecond: nil, secondsRemaining: nil, part: part))
+        )
+    }
+
+    @Test func mergerIsMerging() {
+        #expect(ProgressParser.parse("[stow:postprocess] started Merger") == .progress(.merging))
+    }
+
+    @Test func progressTextNamesThePart() {
+        let video = OutputFormat.video(.mp4, .p1080)
+        #expect(ProgressText.text(for: .downloading(fraction: 0.42, bytesPerSecond: nil, secondsRemaining: 8, part: .video), format: video)
+            == "영상 받는 중 42% · 약 8초 남음")
+        #expect(ProgressText.text(for: .downloading(fraction: 0.5, bytesPerSecond: nil, secondsRemaining: nil, part: .audio), format: video)
+            == "오디오 받는 중 50%")
+        #expect(ProgressText.text(for: .merging, format: video) == "영상과 오디오를 합치는 중…")
+        // 오디오 추출은 지금처럼 "다운로드 중"
+        #expect(ProgressText.text(for: .downloading(fraction: 0.5, bytesPerSecond: nil, secondsRemaining: nil, part: .audio), format: .mp3(.kbps320))
+            == "다운로드 중 50%")
+    }
+
+    @Test func displayNamesAndActions() {
+        #expect(OutputFormat.video(.mp4, .p1080).displayName == "MP4 1080p")
+        #expect(OutputFormat.video(.best, .best).displayName == "최고 화질")
+        #expect(OutputFormat.video(.best, .p1440).displayName == "최고 화질 1440p")
+        #expect(OutputFormat.video(.mp4, .p720).actionTitle == "MP4로 받기")
+        #expect(OutputFormat.video(.best, .best).actionTitle == "최고 화질로 받기")
+        #expect(OutputFormat.flac.actionTitle == "FLAC으로 추출")
+        #expect(OutputFormat.mp3(.kbps192).actionTitle == "MP3로 추출")
     }
 }
 

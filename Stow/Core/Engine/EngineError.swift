@@ -27,6 +27,8 @@ enum EngineError: Error, Equatable, Sendable {
     case blockedByYouTube
     /// 받을 수 있는 오디오 형식이 없다.
     case noAudioFormat
+    /// 고른 영상 포맷(예: MP4의 H.264)으로 받을 수 있는 스트림이 없다.
+    case noVideoFormat
 
     // 환경
     /// 네트워크 연결 문제다.
@@ -78,6 +80,8 @@ extension EngineError: LocalizedError {
             "유튜브가 요청을 일시적으로 막았습니다. 잠시 후 다시 시도해 주세요."
         case .noAudioFormat:
             "이 영상에서 받을 수 있는 오디오를 찾지 못했습니다."
+        case .noVideoFormat:
+            "이 영상은 고른 포맷으로 받을 수 없습니다. 다른 포맷이나 해상도로 해 보세요."
         case .network:
             "네트워크에 연결할 수 없습니다. 인터넷 연결을 확인해 주세요."
         case .diskFull:

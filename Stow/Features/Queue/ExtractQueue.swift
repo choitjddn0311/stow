@@ -295,8 +295,8 @@ final class ExtractQueue {
 
     private static func isVisibleChange(from shown: ExtractProgress?, to new: ExtractProgress) -> Bool {
         switch (shown, new) {
-        case (.downloading(let oldFraction, _, let oldETA)?, .downloading(let newFraction, _, let newETA)):
-            percent(oldFraction) != percent(newFraction) || oldETA != newETA
+        case (.downloading(let oldFraction, _, let oldETA, let oldPart)?, .downloading(let newFraction, _, let newETA, let newPart)):
+            percent(oldFraction) != percent(newFraction) || oldETA != newETA || oldPart != newPart
         default:
             shown != new
         }

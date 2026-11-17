@@ -83,7 +83,11 @@ struct YtDlpClient: Sendable {
             case nil: break
             }
         }
-        guard termination.isSuccess else { throw YtDlpErrorMapper.map(stderr: state.errors) }
+        guard termination.isSuccess else {
+            let error = YtDlpErrorMapper.map(stderr: state.errors)
+            // "형식 없음"은 영상을 받을 때는 고른 영상 포맷이 없다는 뜻이다.
+            throw error == .noAudioFormat && options.format.isVideo ? EngineError.noVideoFormat : error
+        }
 
         guard let outputPath = state.output else { throw EngineError.outputMissing }
         let produced = URL(filePath: outputPath)
@@ -92,7 +96,8 @@ struct YtDlpClient: Sendable {
             produced,
             directory: options.outputDirectory,
             baseName: FileNaming.sanitize(fileName),
-            fileExtension: options.format.fileExtension
+            // 최고 화질 영상은 받은 스트림에 따라 형식이 정해지므로 결과 파일의 확장자를 쓴다.
+            fileExtension: options.format.fileExtension ?? produced.pathExtension
         )
     }
 

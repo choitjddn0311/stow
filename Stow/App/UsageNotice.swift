@@ -4,10 +4,11 @@ import SwiftUI
 /// 첫 실행 이용 고지. 문구를 바꾸면 `version`을 올려 사용자에게 다시 보여 준다.
 /// MVP 문구는 초안이며 상용 배포 전 법률 검토가 필요하다(PROJECT.md 6장).
 enum UsageNotice {
-    static let version = 1
+    /// 2: 영상 다운로드를 넣으며 "오디오를 추출하는 도구"를 "영상과 오디오를 내려받는 도구"로 바꿈
+    static let version = 2
     static let title = "Stow 이용 안내"
     static let paragraphs = [
-        "Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영상의 오디오를 추출하는 도구입니다.",
+        "Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영상과 그 오디오를 내려받는 도구입니다.",
         "다른 사람의 저작물을 허락 없이 내려받거나 배포하면 저작권법이나 YouTube 이용약관을 위반할 수 있으며, 그에 따른 책임은 사용자에게 있습니다.",
     ]
     static let quitButton = "종료"

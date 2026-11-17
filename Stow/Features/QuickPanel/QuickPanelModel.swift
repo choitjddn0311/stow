@@ -91,7 +91,7 @@ final class QuickPanelModel {
     }
 
     /// 포맷 칩 메뉴. 바꾼 값은 메인 창 기본 설정에도 남는다.
-    func select(_ format: AudioFormat) {
+    func select(_ format: OutputFormat) {
         extract.settings.select(format)
     }
 

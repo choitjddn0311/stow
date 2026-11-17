@@ -29,16 +29,9 @@ struct YtDlpArguments: Sendable {
         ]
     }
 
-    /// 오디오 추출. 작업 폴더에 `<영상 ID>.<확장자>`로 저장한다(최종 이름은 호출한 쪽에서 정한다).
-    func extract(_ url: URL, format: AudioFormat, workDirectory: URL) -> [String] {
-        var arguments = common + [
-            "--format", "bestaudio/best",
-            "--extract-audio",
-            "--audio-format", format.fileExtension,
-        ]
-        if case .mp3(let bitrate) = format {
-            arguments += ["--audio-quality", "\(bitrate.rawValue)K"]
-        }
+    /// 오디오 추출 또는 영상 다운로드. 작업 폴더에 `<영상 ID>.<확장자>`로 저장한다(최종 이름은 호출한 쪽에서 정한다).
+    func extract(_ url: URL, format: OutputFormat, workDirectory: URL) -> [String] {
+        var arguments = common + Self.formatArguments(for: format)
         arguments += [
             "--embed-metadata",
             // 중간 파일과 결과 파일을 모두 작업 폴더에 둔다. "home:"을 붙여 경로의 ":"가 형식 구분자로 해석되지 않게 한다.
@@ -55,5 +48,34 @@ struct YtDlpArguments: Sendable {
             url.absoluteString,
         ]
         return arguments
+    }
+
+    /// 포맷별 선택·변환 인자.
+    static func formatArguments(for format: OutputFormat) -> [String] {
+        switch format {
+        case .mp3(let bitrate):
+            ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3",
+             "--audio-quality", "\(bitrate.rawValue)K"]
+        case .wav:
+            ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "wav"]
+        case .flac:
+            ["--format", "bestaudio/best", "--extract-audio", "--audio-format", "flac"]
+        case .video(.mp4, let resolution):
+            // H.264 영상 + AAC(m4a) 오디오만 고른다. 둘로 나뉜 스트림이 없으면 처음부터 합쳐진 MP4.
+            // 다시 인코딩하지 않고 MP4로 합친다.
+            ["--format", "bv*[vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]"]
+                + sortArguments(resolution)
+                + ["--merge-output-format", "mp4"]
+        case .video(.best, let resolution):
+            // 코덱과 관계없이 가장 좋은 영상 + 오디오. 담을 수 있는 형식 중 MP4를 먼저, 안 되면 WebM, 그다음 MKV.
+            ["--format", "bv*+ba/b"]
+                + sortArguments(resolution)
+                + ["--merge-output-format", "mp4/webm/mkv"]
+        }
+    }
+
+    /// `-S res:N`: N 이하 중 가장 높은 해상도를 고르고, 그런 것이 없으면 N보다 높은 것 중 가장 낮은 것.
+    private static func sortArguments(_ resolution: VideoResolution) -> [String] {
+        resolution == .best ? [] : ["--format-sort", "res:\(resolution.rawValue)"]
     }
 }

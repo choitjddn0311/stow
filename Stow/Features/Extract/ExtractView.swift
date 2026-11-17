@@ -304,13 +304,26 @@ private struct QueueRow: View {
     }
 
     /// 진행률을 알면 채워지는 막대, 모르면(준비·변환 중) 움직이는 막대.
+    /// 영상을 영상·오디오 스트림으로 나눠 받을 때는 두 칸(영상 → 오디오)으로 나눠 지금 단계를 보여 준다.
     @ViewBuilder
     private var progressBar: some View {
-        if case .downloading(let fraction?, _, _) = item.progress.value {
-            ProgressView(value: fraction)
+        if case .downloading(let fraction?, _, _, let part) = item.progress.value {
+            if item.options.format.isVideo, part != .combined {
+                HStack(spacing: 4) {
+                    ProgressView(value: part == .video ? fraction : 1)
+                    ProgressView(value: part == .audio ? fraction : 0)
+                }
                 .controlSize(.small)
                 .animation(Motion.progress(reduceMotion: reduceMotion), value: fraction)
-                .accessibilityLabel("다운로드")
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(part == .video ? "영상 다운로드" : "오디오 다운로드")
+                .accessibilityValue("\(Int((fraction * 100).rounded()))%")
+            } else {
+                ProgressView(value: fraction)
+                    .controlSize(.small)
+                    .animation(Motion.progress(reduceMotion: reduceMotion), value: fraction)
+                    .accessibilityLabel("다운로드")
+            }
         } else {
             ProgressView()
                 .progressViewStyle(.linear)
@@ -402,20 +415,25 @@ private struct QueueRow: View {
 }
 
 enum ProgressText {
-    static func text(for progress: ExtractProgress?, format: AudioFormat) -> String {
+    static func text(for progress: ExtractProgress?, format: OutputFormat) -> String {
         switch progress {
         case nil:
-            "준비 중…"
-        case .downloading(let fraction, _, let eta):
-            if let fraction {
-                "다운로드 중 \(Int((fraction * 100).rounded()))%" + (eta.map { " · 약 \($0)초 남음" } ?? "")
-            } else {
-                "다운로드 중…"
+            return "준비 중…"
+        case .downloading(let fraction, _, let eta, let part):
+            // 영상은 영상·오디오를 따로 받으므로 지금 받는 쪽을 밝힌다(합쳐진 스트림이면 그냥 다운로드).
+            let verb = switch (format.isVideo, part) {
+            case (true, .video): "영상 받는 중"
+            case (true, .audio): "오디오 받는 중"
+            default: "다운로드 중"
             }
+            guard let fraction else { return "\(verb)…" }
+            return "\(verb) \(Int((fraction * 100).rounded()))%" + (eta.map { " · 약 \($0)초 남음" } ?? "")
         case .converting:
-            "\(format.displayName)(으)로 변환 중…"
+            return "\(format.displayName)(으)로 변환 중…"
+        case .merging:
+            return "영상과 오디오를 합치는 중…"
         case .embeddingMetadata:
-            "제목·아티스트 정보를 넣는 중…"
+            return format.isVideo ? "제목·채널 정보를 넣는 중…" : "제목·아티스트 정보를 넣는 중…"
         }
     }
 }
@@ -444,39 +462,28 @@ private struct VideoRow: View {
     }
 }
 
-/// "출력" 섹션: 포맷 · 음질 · 저장 위치. 대기열에 넣을 때의 값이 그 항목에 고정된다.
+/// "출력" 섹션: 종류 · 포맷 · 음질(해상도) · 저장 위치. 대기열에 넣을 때의 값이 그 항목에 고정된다.
 private struct OutputSection: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
         Section {
-            Picker(selection: $settings.formatKind) {
-                ForEach(AudioFormatKind.allCases, id: \.self) { kind in
+            Picker(selection: $settings.mediaKind) {
+                ForEach(MediaKind.allCases, id: \.self) { kind in
                     Text(kind.displayName).tag(kind)
                 }
             } label: {
                 Label {
-                    Text("포맷")
+                    Text("종류")
                 } icon: {
-                    RowIcon(symbol: "waveform")
+                    RowIcon(symbol: settings.mediaKind.symbol)
                 }
             }
             .pickerStyle(.segmented)
 
-            if settings.formatKind == .mp3 {
-                Picker(selection: $settings.mp3Bitrate) {
-                    ForEach(MP3Bitrate.allCases, id: \.self) { bitrate in
-                        Text("\(bitrate.rawValue) kbps").tag(bitrate)
-                    }
-                } label: {
-                    qualityLabel
-                }
-            } else {
-                LabeledContent {
-                    Text("무손실(원본 샘플레이트 유지)")
-                } label: {
-                    qualityLabel
-                }
+            switch settings.mediaKind {
+            case .audio: audioRows
+            case .video: videoRows
             }
 
             LabeledContent {
@@ -497,8 +504,74 @@ private struct OutputSection: View {
         } header: {
             Text("출력")
         } footer: {
-            Text("대기열에 넣는 순간의 포맷·저장 위치로 추출합니다.")
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                if settings.mediaKind == .video {
+                    Text(settings.videoFormat.note)
+                }
+                Text("대기열에 넣는 순간의 포맷·저장 위치로 \(settings.mediaKind == .video ? "받습니다" : "추출합니다").")
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var audioRows: some View {
+        Picker(selection: $settings.formatKind) {
+            ForEach(AudioFormatKind.allCases, id: \.self) { kind in
+                Text(kind.displayName).tag(kind)
+            }
+        } label: {
+            formatLabel
+        }
+        .pickerStyle(.segmented)
+
+        if settings.formatKind == .mp3 {
+            Picker(selection: $settings.mp3Bitrate) {
+                ForEach(MP3Bitrate.allCases, id: \.self) { bitrate in
+                    Text("\(bitrate.rawValue) kbps").tag(bitrate)
+                }
+            } label: {
+                qualityLabel
+            }
+        } else {
+            LabeledContent {
+                Text("무손실(원본 샘플레이트 유지)")
+            } label: {
+                qualityLabel
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var videoRows: some View {
+        Picker(selection: $settings.videoFormat) {
+            ForEach(VideoFormat.allCases, id: \.self) { format in
+                Text(format.displayName).tag(format)
+            }
+        } label: {
+            formatLabel
+        }
+        .pickerStyle(.segmented)
+
+        Picker(selection: $settings.videoResolution) {
+            ForEach(settings.videoFormat.resolutions, id: \.self) { resolution in
+                Text(resolution.displayName).tag(resolution)
+            }
+        } label: {
+            Label {
+                Text("해상도")
+            } icon: {
+                RowIcon(symbol: "rectangle.on.rectangle")
+            }
+        }
+        .help("고른 해상도가 없으면 그보다 낮은 것 중 가장 높은 해상도로 받습니다.")
+    }
+
+    private var formatLabel: some View {
+        Label {
+            Text("포맷")
+        } icon: {
+            RowIcon(symbol: "waveform")
         }
     }
 
@@ -552,14 +625,59 @@ enum DurationFormat {
     }
 }
 
-extension AudioFormat {
-    /// 화면 표시용 이름. 예: "MP3 320kbps", "FLAC"
+extension OutputFormat {
+    /// 화면 표시용 이름. 예: "MP3 320kbps", "FLAC", "MP4 1080p", "최고 화질", "최고 화질 1440p"
     var displayName: String {
         switch self {
         case .mp3(let bitrate): "MP3 \(bitrate.rawValue)kbps"
         case .wav: "WAV"
         case .flac: "FLAC"
+        case .video(let format, let resolution):
+            resolution == .best ? format.displayName : "\(format.displayName) \(resolution.displayName)"
         }
+    }
+
+    /// 추가 버튼 등에 쓰는 짧은 이름(음질·해상도 없이). 예: "MP3", "MP4", "최고 화질"
+    var shortName: String {
+        switch self {
+        case .mp3: "MP3"
+        case .wav: "WAV"
+        case .flac: "FLAC"
+        case .video(let format, _): format.displayName
+        }
+    }
+
+    /// "MP3로 추출", "FLAC으로 추출", "MP4로 받기", "최고 화질로 받기". 영상은 변환 없이 그대로 받으므로 "받기".
+    var actionTitle: String {
+        switch self {
+        case .mp3, .wav: "\(shortName)로 추출"
+        case .flac: "FLAC으로 추출"
+        case .video: "\(shortName)로 받기"
+        }
+    }
+}
+
+extension VideoFormat {
+    var displayName: String {
+        switch self {
+        case .mp4: "MP4"
+        case .best: "최고 화질"
+        }
+    }
+
+    /// 출력 섹션 아래 설명
+    var note: String {
+        switch self {
+        case .mp4: "편집 프로그램(Premiere·Final Cut 등)에서 바로 열리는 H.264 MP4입니다. 유튜브가 1080p까지만 제공합니다."
+        case .best: "가장 높은 화질로 받습니다. 4K 이상은 VP9·AV1 코덱이라 일부 편집 프로그램에서 열리지 않을 수 있고, 파일 형식(MP4·WebM·MKV)은 영상에 따라 정해집니다."
+        }
+    }
+}
+
+extension VideoResolution {
+    /// 예: "1080p", "최고"
+    var displayName: String {
+        self == .best ? "최고" : "\(rawValue)p"
     }
 }
 

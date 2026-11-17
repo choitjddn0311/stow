@@ -8,8 +8,8 @@ import Testing
 struct YtDlpClientOfflineTests {
     private let engine = try! EngineLocator.bundled()
 
-    @Test(arguments: [AudioFormat.mp3(.kbps320), .mp3(.kbps128), .wav, .flac])
-    func extractsLocalFile(_ format: AudioFormat) async throws {
+    @Test(arguments: [OutputFormat.mp3(.kbps320), .mp3(.kbps128), .wav, .flac])
+    func extractsLocalFile(_ format: OutputFormat) async throws {
         let fixture = try TestFixture()
         defer { fixture.cleanUp() }
         let client = YtDlpClient(engine: engine, additionalArguments: ["--enable-file-urls"])
@@ -22,7 +22,7 @@ struct YtDlpClientOfflineTests {
             progress: { progress.append($0) }
         )
 
-        #expect(output == fixture.outputDirectory.appending(path: "결과- 테스트.\(format.fileExtension)"))
+        #expect(output == fixture.outputDirectory.appending(path: "결과- 테스트.\(format.fileExtension ?? "")"))
         let info = try await AudioProbe.inspect(output, engine: engine)
         switch format {
         case .mp3(let bitrate):
@@ -32,13 +32,15 @@ struct YtDlpClientOfflineTests {
             #expect(info.codec == "pcm_s16le")
         case .flac:
             #expect(info.codec == "flac")
+        case .video:
+            Issue.record("오디오 포맷만 검사한다")
         }
         #expect(info.title == "tone source")  // --embed-metadata
         #expect(abs(info.duration - 3) < 0.2)
         try AudioProbe.decodeWithCoreAudio(output)
 
         let events = progress.events
-        #expect(events.contains { if case .downloading(fraction: 1, _, _) = $0 { true } else { false } })
+        #expect(events.contains { if case .downloading(fraction: 1, _, _, _) = $0 { true } else { false } })
         #expect(events.contains(.converting))
         #expect(events.contains(.embeddingMetadata))
         // 작업 폴더는 남지 않고, 저장 위치에는 결과 파일만 있다.
@@ -147,7 +149,7 @@ struct YtDlpClientNetworkTests {
         let duration = try #require(metadata.duration)
         print("[network test] \(metadata.title) (\(duration)s) → \(outputDirectory.path)")
 
-        for format in [AudioFormat.mp3(.kbps320), .wav, .flac] {
+        for format in [OutputFormat.mp3(.kbps320), .wav, .flac] {
             let progress = ProgressRecorder()
             let output = try await client.extract(
                 url, options: ExtractOptions(format: format, outputDirectory: outputDirectory),
@@ -161,9 +163,71 @@ struct YtDlpClientNetworkTests {
             case .mp3: #expect(info.codec == "mp3" && abs(info.bitRate - 320_000) <= 16_000)
             case .wav: #expect(info.codec.hasPrefix("pcm_"))
             case .flac: #expect(info.codec == "flac")
+            case .video: Issue.record("오디오 포맷만 검사한다")
             }
             try AudioProbe.decodeWithCoreAudio(output)
             #expect(progress.events.contains { if case .downloading = $0 { true } else { false } })
+        }
+    }
+}
+
+/// 실제 유튜브 영상으로 영상 다운로드를 확인한다. 네트워크가 필요하므로 URL을 줄 때만 실행한다.
+///   TEST_RUNNER_STOW_NETWORK_VIDEO_URL=<url> [TEST_RUNNER_STOW_NETWORK_TEST_OUTPUT=<폴더>] xcodebuild ... test
+/// 파일이 작도록 480p로 받는다(해상도 선택이 실제로 지켜지는지도 함께 본다).
+@Suite(.enabled(if: ProcessInfo.processInfo.environment["STOW_NETWORK_VIDEO_URL"] != nil))
+struct YtDlpClientVideoNetworkTests {
+    private let engine = try! EngineLocator.bundled()
+
+    @Test(arguments: [OutputFormat.video(.mp4, .p480), .video(.best, .p480)])
+    func downloadsRealVideo(_ format: OutputFormat) async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let url = try YouTubeURL.parse(try #require(environment["STOW_NETWORK_VIDEO_URL"]))
+        let outputDirectory = URL(filePath: environment["STOW_NETWORK_TEST_OUTPUT"]
+            ?? FileManager.default.temporaryDirectory.appending(path: "stow-network-\(UUID().uuidString)").path)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let client = YtDlpClient(engine: engine)
+        guard case .video(let metadata) = try await client.fetchMedia(for: url) else {
+            Issue.record("영상이 아니라 재생목록으로 해석됨")
+            return
+        }
+        let progress = ProgressRecorder()
+        let output = try await client.extract(
+            url, options: ExtractOptions(format: format, outputDirectory: outputDirectory),
+            fileName: metadata.title, progress: { progress.append($0) }
+        )
+        let streams = try await Self.streams(of: output)
+        print("[network test] \(output.lastPathComponent): \(streams)")
+        let video = try #require(streams.first { $0["codec_type"] == "video" }, "영상 스트림 없음")
+        #expect(streams.contains { $0["codec_type"] == "audio" }, "오디오 스트림 없음")
+        #expect((Int(video["height"] ?? "") ?? .max) <= 480)
+        if case .video(.mp4, _) = format {
+            #expect(output.pathExtension == "mp4")
+            #expect(video["codec_name"] == "h264")
+            #expect(streams.contains { $0["codec_name"] == "aac" })
+        } else {
+            #expect(["mp4", "webm", "mkv"].contains(output.pathExtension))
+        }
+        #expect(output.deletingPathExtension().lastPathComponent.hasPrefix(FileNaming.sanitize(metadata.title)))
+        let events = progress.events
+        // 영상·오디오를 나눠 받았다면 합치는 단계가 있어야 한다.
+        if events.contains(where: { if case .downloading(_, _, _, .video) = $0 { true } else { false } }) {
+            #expect(events.contains { if case .downloading(_, _, _, .audio) = $0 { true } else { false } })
+            #expect(events.contains(.merging))
+        }
+    }
+
+    private static func streams(of file: URL) async throws -> [[String: String]] {
+        let result = try await ProcessRunner().run(try EngineLocator.bundled().ffprobe, arguments: [
+            "-v", "error", "-show_entries", "stream=codec_type,codec_name,height", "-of", "compact=nokey=0", file.path,
+        ])
+        #expect(result.termination.isSuccess, "ffprobe: \(result.stderr)")
+        return result.stdout.filter { $0.hasPrefix("stream|") }.map { line in
+            var values: [String: String] = [:]
+            for part in line.split(separator: "|").dropFirst() {
+                let pair = part.split(separator: "=", maxSplits: 1).map(String.init)
+                if pair.count == 2 { values[pair[0]] = pair[1] }
+            }
+            return values
         }
     }
 }
