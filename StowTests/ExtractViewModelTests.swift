@@ -441,6 +441,30 @@ struct AppSettingsTests {
         #expect(second.format == .mp3(.kbps128))  // WAV/FLAC을 거쳐도 MP3 음질은 기억한다
     }
 
+    /// 실제 저장소(디스크)에 쓰고 새 객체로 다시 읽어도 유지된다. 다른 테스트는 메모리 저장소를 쓰므로 여기서만 진짜 저장소를 쓴다.
+    /// 실행마다 새 이름을 만들면 ~/Library/Preferences에 파일이 쌓이므로 고정 이름 하나를 앞뒤로 비워 가며 쓴다.
+    @Test func persistsOnDisk() throws {
+        let suiteName = "stow-tests-persistence"
+        let writer = try #require(UserDefaults(suiteName: suiteName))
+        writer.removePersistentDomain(forName: suiteName)
+        defer { writer.removePersistentDomain(forName: suiteName) }
+
+        let first = AppSettings(defaults: writer)
+        first.formatKind = .wav
+        first.mp3Bitrate = .kbps192
+        first.outputDirectory = URL(filePath: "/tmp/디스크 저장", directoryHint: .isDirectory)
+        first.acceptedNoticeVersion = UsageNotice.version
+        #expect(CFPreferencesAppSynchronize(suiteName as CFString))
+
+        let reader = try #require(UserDefaults(suiteName: suiteName))
+        let second = AppSettings(defaults: reader)
+        #expect(second.format == .wav)
+        #expect(second.mp3Bitrate == .kbps192)
+        #expect(second.outputDirectory.path == "/tmp/디스크 저장")
+        #expect(second.acceptedNoticeVersion == UsageNotice.version)
+        #expect(second.recentOutputDirectories.first?.path == "/tmp/디스크 저장")
+    }
+
     @Test func selectFormat() {
         let settings = AppSettings(defaults: InMemoryDefaults())
         settings.select(.mp3(.kbps128))

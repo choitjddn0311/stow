@@ -9,7 +9,12 @@ import Testing
 /// 같은 저장소를 다시 여는 상황(앱 재시작)은 같은 인스턴스를 다시 넘겨 흉내 낸다.
 ///
 /// `string(forKey:)`·`integer(forKey:)`·`set(_: Int, forKey:)` 같은 편의 메서드는 Foundation이
-/// `object(forKey:)`·`set(_: Any?, forKey:)`로 처리하므로, 이 둘과 `removeObject(forKey:)`만 바꾸면 된다.
+/// `object(forKey:)`·`set(_: Any?, forKey:)`로 처리하므로, 이 둘과 `removeObject(forKey:)`만 바꾸면 된다
+/// (앱이 쓰는 것은 `InMemoryDefaultsTests`가 확인한다).
+///
+/// 실제 저장소처럼 값을 프로퍼티 목록으로 직렬화했다가 다시 읽어 보관한다. 그래서 저장할 수 없는 값은 실제처럼 실패하고,
+/// 읽을 때는 저장한 객체가 아니라 복사본이 나온다. `register(defaults:)`·변경 알림(KVO)은 흉내 내지 않는다(앱이 쓰지 않음).
+/// 실제 디스크 저장·읽기는 `AppSettingsTests.persistsOnDisk`가 진짜 저장소로 확인한다.
 final class InMemoryDefaults: UserDefaults, @unchecked Sendable {
     /// 덮어쓰지 않은 메서드가 혹시 쓰더라도 앱 설정과 섞이지 않게 하는 빈 영역(실제로는 쓰이지 않아야 한다).
     static let backingSuiteName = "stow-tests-in-memory"
@@ -26,7 +31,17 @@ final class InMemoryDefaults: UserDefaults, @unchecked Sendable {
     }
 
     override func set(_ value: Any?, forKey defaultName: String) {
-        lock.withLock { values[defaultName] = value }
+        guard let value else {
+            removeObject(forKey: defaultName)
+            return
+        }
+        // 실제 UserDefaults는 프로퍼티 목록이 아닌 값을 받으면 예외로 멈춘다. 테스트도 같은 버그를 잡도록 실패시킨다.
+        guard let data = try? PropertyListSerialization.data(fromPropertyList: [defaultName: value], format: .binary, options: 0),
+              let copy = (try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])?[defaultName]
+        else {
+            preconditionFailure("InMemoryDefaults: '\(defaultName)'에 프로퍼티 목록이 아닌 값을 저장함: \(type(of: value))")
+        }
+        lock.withLock { values[defaultName] = copy }
     }
 
     override func removeObject(forKey defaultName: String) {
@@ -51,8 +66,21 @@ struct InMemoryDefaultsTests {
         #expect(defaults.object(forKey: "date") as? Date == date)
         #expect(defaults.integer(forKey: "missing") == 0)
 
+        defaults.set(true, forKey: "bool")
+        defaults.set(1.5, forKey: "double")
+        #expect(defaults.bool(forKey: "bool"))
+        #expect(defaults.double(forKey: "double") == 1.5)
+
+        // 저장한 객체가 아니라 복사본이 나온다(실제 저장소와 같다).
+        let mutable = NSMutableArray(array: ["x"])
+        defaults.set(mutable, forKey: "copied")
+        mutable.add("y")
+        #expect(defaults.stringArray(forKey: "copied") == ["x"])
+
         defaults.removeObject(forKey: "string")
         #expect(defaults.string(forKey: "string") == nil)
+        defaults.set(nil, forKey: "int")
+        #expect(defaults.object(forKey: "int") == nil)
         // 다른 인스턴스와 값이 섞이지 않는다.
         #expect(InMemoryDefaults().string(forKey: "array") == nil)
     }
@@ -71,8 +99,11 @@ struct InMemoryDefaultsTests {
         #expect(reopened.mp3Bitrate == .kbps192)
         #expect(reopened.acceptedNoticeVersion == 3)
 
+        // 덮어쓰지 않은 메서드로 새는 값이 있으면 뒤쪽 영역의 설정 파일이 생긴다.
         let backing = try #require(UserDefaults(suiteName: InMemoryDefaults.backingSuiteName))
-        #expect(backing.dictionaryRepresentation().keys.contains("formatKind") == false)
-        #expect(backing.persistentDomain(forName: InMemoryDefaults.backingSuiteName)?.isEmpty ?? true)
+        #expect(backing.persistentDomain(forName: InMemoryDefaults.backingSuiteName)?["formatKind"] == nil)
+        let file = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Preferences/\(InMemoryDefaults.backingSuiteName).plist")
+        #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 }
