@@ -8,7 +8,8 @@ import Testing
 ///     TEST_RUNNER_STOW_README_SHOTS=<폴더> xcodebuild ... test -only-testing:StowTests/ReadmeScreenshotTests
 ///
 /// - 실제 유튜브 영상·채널 대신 가상의 제목과 직접 그린 추상 썸네일을 쓴다(저작권·초상권 문제를 피하려고).
-/// - 실제 창(제목 막대·유리 패널)을 화면에 띄우고 뒤에 배경 창을 깐 뒤 그 영역을 캡처한다.
+/// - 실제 창(제목 막대·유리 패널)을 화면에 띄우고 뒤에 배경 창을 깐 뒤 그 창만 캡처한다(바깥은 투명, 창 그림자 포함).
+///   유리 패널은 배경 위에서 패널 영역을 찍고 둥근 모서리 밖을 지운다(창만 찍으면 유리가 회색 판으로 나옴).
 ///   캡처에는 화면 기록 권한이 필요하다(터미널에서 실행할 때 터미널에 권한이 있어야 함).
 @MainActor
 @Suite(.enabled(if: readmeShotsDirectory != nil), .serialized)
@@ -76,7 +77,9 @@ struct ReadmeScreenshotTests {
                 panel.setFrameOrigin(NSPoint(x: visible.midX - panel.frame.width / 2, y: visible.midY - panel.frame.height / 2))
                 try await Task.sleep(for: .milliseconds(500))
             }
-            try await Self.screencapture(rect: panel.frame.insetBy(dx: -40, dy: -40), name: "panel-\(dark ? "dark" : "light")")
+            try await Self.screencapture(
+                roundedPanel: panel, cornerRadius: QuickPanelView.cornerRadius, name: "panel-\(dark ? "dark" : "light")"
+            )
         } catch {
             model.dismiss()
             backdrop.close()
@@ -91,8 +94,6 @@ struct ReadmeScreenshotTests {
     // MARK: - 창 띄우고 찍기
 
     private func capture(_ view: some View, size: CGSize, dark: Bool, name: String) async throws {
-        let backdrop = Backdrop.show(dark: dark)
-        defer { backdrop.close() }
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -113,36 +114,81 @@ struct ReadmeScreenshotTests {
         try await Task.sleep(for: .milliseconds(300))
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(1200))
-        try await Self.screencapture(rect: window.frame.insetBy(dx: -40, dy: -40), name: name)
+        try await Self.screencapture(window: window, name: name)
     }
 
     /// 찍을 화면: 주 화면(메뉴 막대가 있는 화면). 배경·창을 모두 여기에 둔다.
     private static var screen: NSScreen? { NSScreen.screens.first }
 
-    /// 화면 좌표(왼쪽 아래 원점)의 영역을 PNG로 찍는다.
-    ///
-    /// 테스트 앱에는 화면 기록 권한이 없으므로 직접 찍지 않는다. 찍을 영역을 `<이름>.region`에 적고,
-    /// 권한이 있는 터미널에서 도는 스크립트가 `screencapture -R`로 `<이름>.png`를 만들 때까지 기다린다.
-    /// (스크립트 예: 폴더의 `.region` 파일마다 `screencapture -x -R "$(cat f)" "${f%.region}.png"` 후 `.region` 삭제)
-    private static func screencapture(rect: NSRect, name: String) async throws {
-        let directory = try #require(readmeShotsDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    /// 창 하나만 PNG로 찍는다(바깥은 투명, 창 그림자 포함).
+    private static func screencapture(window: NSWindow, name: String) async throws {
+        try await requestCapture(kind: "window", spec: String(window.windowNumber), name: name)
+    }
+
+    /// 유리 패널은 창만 찍으면 뒤가 비치지 않아 회색 판으로 나오므로, 배경 위의 패널 영역을 찍은 뒤
+    /// 패널 모양(둥근 모서리) 밖을 투명하게 지운다.
+    private static func screencapture(roundedPanel panel: NSWindow, cornerRadius: CGFloat, name: String) async throws {
+        // macOS 26+ 패널 창에는 유리 둘레에 그림자용 투명 여백이 있으므로 유리 자체의 영역을 찍는다.
+        // 그 전에는 둥근 반투명 재질이 창 전체다.
+        var shape = panel.contentView
+        if #available(macOS 26.0, *) {
+            shape = try #require(Self.firstSubview(of: NSGlassEffectView.self, in: panel.contentView), "유리 뷰를 찾지 못함")
+        }
+        let view = try #require(shape)
+        // 찍는 영역과 자르는 모양이 같은 픽셀에 맞도록 정수 좌표로 맞춘다.
+        let rect = panel.convertToScreen(view.convert(view.bounds, to: nil)).integral
         let screenHeight = NSScreen.screens.first?.frame.height ?? rect.maxY
         // screencapture -R은 왼쪽 위 원점이다.
         let region = "\(Int(rect.minX)),\(Int(screenHeight - rect.maxY)),\(Int(rect.width)),\(Int(rect.height))"
+        try await requestCapture(kind: "region", spec: region, name: name)
+
+        let url = try #require(readmeShotsDirectory).appending(path: "\(name).png")
+        let source = try #require(NSBitmapImageRep(data: try Data(contentsOf: url))?.cgImage, "\(name).png를 읽지 못함")
+        let scale = CGFloat(source.width) / rect.width
+        let size = CGSize(width: source.width, height: source.height)
+        let context = try #require(CGContext(
+            data: nil, width: source.width, height: source.height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: source.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        // 패널과 같은 연속 곡률 모서리로 자른다.
+        context.addPath(RoundedRectangle(cornerRadius: cornerRadius * scale, style: .continuous)
+            .path(in: CGRect(origin: .zero, size: size)).cgPath)
+        context.clip()
+        context.draw(source, in: CGRect(origin: .zero, size: size))
+        let clipped = try #require(context.makeImage())
+        let png = try #require(NSBitmapImageRep(cgImage: clipped).representation(using: .png, properties: [:]))
+        try png.write(to: url)
+    }
+
+    private static func firstSubview<T: NSView>(of type: T.Type, in view: NSView?) -> T? {
+        guard let view else { return nil }
+        if let match = view as? T { return match }
+        for subview in view.subviews {
+            if let match = firstSubview(of: type, in: subview) { return match }
+        }
+        return nil
+    }
+
+    /// 테스트 앱에는 화면 기록 권한이 없으므로 직접 찍지 않는다. 찍을 대상을 `<이름>.<kind>`에 적고,
+    /// 권한이 있는 터미널에서 도는 스크립트가 `<이름>.png`를 만들 때까지 기다린다. 스크립트 예(bash, `shopt -s nullglob`):
+    /// `.window` 파일마다 `screencapture -x -l "$(cat f)" "${f%.window}.png"`,
+    /// `.region` 파일마다 `screencapture -x -R "$(cat f)" "${f%.region}.png"`, 찍은 뒤 파일 삭제.
+    private static func requestCapture(kind: String, spec: String, name: String) async throws {
+        let directory = try #require(readmeShotsDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let image = directory.appending(path: "\(name).png")
-        let regionFile = directory.appending(path: "\(name).region")
+        let request = directory.appending(path: "\(name).\(kind)")
         try? FileManager.default.removeItem(at: image)
-        try region.write(to: regionFile, atomically: true, encoding: .utf8)
-        // 영역 파일이 남지 않게 한다(나중에 켠 스크립트가 다른 화면을 찍지 않도록).
-        defer { try? FileManager.default.removeItem(at: regionFile) }
-        // 스크립트는 영역 파일을 곧바로 가져간다. 3초 안에 가져가지 않으면 스크립트가 없는 것으로 보고 멈춘다.
-        for _ in 0..<30 where FileManager.default.fileExists(atPath: regionFile.path)
+        try spec.write(to: request, atomically: true, encoding: .utf8)
+        // 요청 파일이 남지 않게 한다(나중에 켠 스크립트가 다른 화면을 찍지 않도록).
+        defer { try? FileManager.default.removeItem(at: request) }
+        // 스크립트는 요청 파일을 곧바로 가져간다. 3초 안에 가져가지 않으면 스크립트가 없는 것으로 보고 멈춘다.
+        for _ in 0..<30 where FileManager.default.fileExists(atPath: request.path)
             && !FileManager.default.fileExists(atPath: image.path) {
             try await Task.sleep(for: .milliseconds(100))
         }
         for _ in 0..<100 where !FileManager.default.fileExists(atPath: image.path)
-            && !FileManager.default.fileExists(atPath: regionFile.path) {
+            && !FileManager.default.fileExists(atPath: request.path) {
             try await Task.sleep(for: .milliseconds(100))
         }
         try #require(
