@@ -1,33 +1,57 @@
 {
-  "fill" : {
-    "automatic-gradient" : "srgb:0.07059,0.56471,0.49804,1.00000"
+  "fill": {
+    "automatic-gradient": "srgb:0.07059,0.56471,0.49804,1.00000"
   },
-  "fill-specializations" : [
-    { "appearance" : "dark", "value" : "system-dark" }
-  ],
-  "groups" : [
+  "fill-specializations": [
     {
-      "name" : "Glyphs",
-      "layers" : [
+      "appearance": "dark",
+      "value": "system-dark"
+    }
+  ],
+  "groups": [
+    {
+      "name": "Glyphs",
+      "layers": [
         {
-          "name" : "Waveform",
-          "image-name" : "waveform.svg",
-          "glass" : true,
-          "fill-specializations" : [
-            { "appearance" : "dark", "value" : { "solid" : "srgb:0.27451,0.83922,0.72941,1.00000" } }
+          "name": "Waveform",
+          "image-name": "waveform.svg",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.27451,0.83922,0.72941,1.00000"
+              }
+            }
           ]
         },
         {
-          "name" : "Box",
-          "image-name" : "box.svg",
-          "glass" : true,
-          "fill-specializations" : [
-            { "appearance" : "dark", "value" : { "solid" : "srgb:0.27451,0.83922,0.72941,1.00000" } }
+          "name": "Box",
+          "image-name": "box.svg",
+          "glass": true,
+          "fill-specializations": [
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.27451,0.83922,0.72941,1.00000"
+              }
+            }
           ]
         }
       ],
-      "shadow" : { "kind" : "neutral", "opacity" : 0.5 }
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular-specializations": [
+        {
+          "appearance": "dark",
+          "value": false
+        }
+      ]
     }
   ],
-  "supported-platforms" : { "squares" : "shared" }
+  "supported-platforms": {
+    "squares": "shared"
+  }
 }
