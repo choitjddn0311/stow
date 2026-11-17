@@ -69,6 +69,13 @@ struct OpenSourceComponent: Identifiable, Hashable, Sendable {
         ),
     ]
 
+    /// 홈페이지 주소를 "github.com/yt-dlp/yt-dlp"처럼 스킴 없이 보여 준다(호스트가 같은 항목끼리 구분되게).
+    var homepageLabel: String {
+        let host = homepage.host() ?? homepage.absoluteString
+        let path = homepage.path()
+        return path.isEmpty || path == "/" ? host : host + path
+    }
+
     /// 이 버전 앱의 GitHub 릴리스 페이지. LGPL 구성 요소의 원본 소스를 DMG와 같은 곳에 올린다.
     static func sourceReleaseURL(version: String) -> URL {
         URL(string: "https://github.com/choitjddn0311/stow/releases/tag/v\(version)")!

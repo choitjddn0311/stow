@@ -37,6 +37,13 @@ struct OpenSourceComponentTests {
         #expect(OpenSourceComponent.all.filter(\.providesSource).count == lgpl.count)
     }
 
+    @Test func homepageLabelKeepsPathWithoutScheme() throws {
+        let ytdlp = try #require(OpenSourceComponent.all.first { $0.id == "yt-dlp" })
+        #expect(ytdlp.homepageLabel == "github.com/yt-dlp/yt-dlp")
+        let ffmpeg = try #require(OpenSourceComponent.all.first { $0.id == "ffmpeg" })
+        #expect(ffmpeg.homepageLabel == "ffmpeg.org")
+    }
+
     @Test func sourceReleaseURLPointsToVersionTag() {
         #expect(
             OpenSourceComponent.sourceReleaseURL(version: "0.5.0").absoluteString

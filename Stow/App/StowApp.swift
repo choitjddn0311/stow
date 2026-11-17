@@ -70,7 +70,9 @@ struct StowApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .appInfo) {
-                OpenSourceLicensesButton()
+                // 메뉴 명령 안에서 환경의 openWindow를 읽으면, 열린 창이 없을 때 항목이 메뉴에서 사라진다(확인함).
+                // 그래서 메인 창처럼 코디네이터에 연결한 동작으로 연다.
+                Button("오픈소스 라이선스…") { coordinator.openLicensesWindow() }
                 Divider()
                 CheckForUpdatesButton(updater: updaterController.updater)
                 Divider()
@@ -123,6 +125,7 @@ private struct OpenMainWindowBinder: ViewModifier {
         content.onAppear {
             let openWindow = openWindow
             coordinator.openMainWindowAction = { openWindow(id: AppCoordinator.mainWindowID) }
+            coordinator.openLicensesWindowAction = { openWindow(id: OpenSourceLicensesView.windowID) }
         }
     }
 }

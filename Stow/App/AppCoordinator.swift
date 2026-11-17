@@ -14,6 +14,8 @@ final class AppCoordinator {
     @ObservationIgnored private let panelController: QuickPanelController?
     /// 메인 창을 여는 동작. SwiftUI 환경의 `openWindow`를 화면이 연결한다.
     @ObservationIgnored var openMainWindowAction: (() -> Void)?
+    /// "오픈소스 라이선스" 창을 여는 동작(메인 창과 같은 방식으로 연결한다).
+    @ObservationIgnored var openLicensesWindowAction: (() -> Void)?
 
     var queue: ExtractQueue? { mainModel?.queue }
 
@@ -54,6 +56,11 @@ final class AppCoordinator {
     func openMainWindow() {
         NSApp.activate()
         openMainWindowAction?()
+    }
+
+    func openLicensesWindow() {
+        NSApp.activate()
+        openLicensesWindowAction?()
     }
 
     /// 패널에서 "메인 창에서 고르기": 패널이 불러온 재생목록을 메인 창에 넘겨(다시 조회하지 않음) 창을 연다.
