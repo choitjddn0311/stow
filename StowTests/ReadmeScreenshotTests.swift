@@ -159,17 +159,12 @@ struct ReadmeScreenshotTests {
         let queue: ExtractQueue
         let settings: AppSettings
         let engine: SampleEngine
-        let defaults: UserDefaults
-        let suiteName: String
         let options: ExtractOptions
 
         @MainActor
         static func make(media: FetchedMedia, fetchNow: Bool = true) async throws -> Fixture {
-            // 실행마다 새 이름을 만들면 ~/Library/Preferences에 파일이 쌓이므로 고정된 이름 하나를 비워 가며 쓴다.
-            let suiteName = "stow-readme-screenshots"
-            let defaults = try #require(UserDefaults(suiteName: suiteName))
-            defaults.removePersistentDomain(forName: suiteName)
-            let settings = AppSettings(defaults: defaults)
+            // 설정은 메모리에만 둔다(~/Library/Preferences에 파일을 남기지 않게).
+            let settings = AppSettings(defaults: InMemoryDefaults())
             settings.acceptedNoticeVersion = UsageNotice.version
             // 화면에 "~/Music"으로 보이게, 실제로 있는 폴더를 쓴다(폴더가 없으면 추출이 실패로 표시된다).
             let music = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Music", directoryHint: .isDirectory)
@@ -189,7 +184,7 @@ struct ReadmeScreenshotTests {
                 await model.waitForTask()
             }
             return Fixture(
-                model: model, queue: queue, settings: settings, engine: engine, defaults: defaults, suiteName: suiteName,
+                model: model, queue: queue, settings: settings, engine: engine,
                 options: ExtractOptions(format: .mp3(.kbps320), outputDirectory: FileManager.default.temporaryDirectory)
             )
         }
@@ -210,12 +205,10 @@ struct ReadmeScreenshotTests {
             )
         }
 
-        /// 작업을 멈추고 테스트 설정을 비운다(설정 파일은 고정 이름 하나만 남는다).
         @MainActor
         func tearDown() async {
             model.cancelFetch()
             await queue.cancelAndWait()
-            defaults.removePersistentDomain(forName: suiteName)
         }
     }
 

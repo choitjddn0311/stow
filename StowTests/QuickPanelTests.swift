@@ -53,7 +53,7 @@ struct QuickPanelModelTests {
     }
 
     private func makePanel(engine: FakeEngine, clipboard: FakeClipboard = FakeClipboard()) -> Fixture {
-        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-panel-test-\(UUID().uuidString)")!)
+        let settings = AppSettings(defaults: InMemoryDefaults())
         settings.outputDirectory = panelOutputDirectory
         let queue = ExtractQueue(engine: engine, notifier: SilentNotifier())
         // 자동 불러오기 지연을 길게 두어, 테스트가 부른 fetch만 돌게 한다.
@@ -325,7 +325,7 @@ struct QuickPanelModelTests {
 struct ShowLoadedPlaylistTests {
     @Test func showsPlaylistWithoutFetchingAndKeepsIt() async throws {
         let engine = FakeEngine(media: .success(.video(panelMetadata)))
-        let settings = AppSettings(defaults: UserDefaults(suiteName: "stow-panel-test-\(UUID().uuidString)")!)
+        let settings = AppSettings(defaults: InMemoryDefaults())
         let queue = ExtractQueue(engine: engine, notifier: SilentNotifier())
         let model = ExtractViewModel(settings: settings, engine: engine, queue: queue, autoFetchDelay: .milliseconds(20))
         // 메인 창에 다른 영상이 불러와 있던 상태
