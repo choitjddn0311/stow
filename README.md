@@ -57,7 +57,7 @@ FFmpeg와 LAME은 GPL 구성 없이 LGPL로 직접 빌드했습니다. 앱에 �
 
 ## 직접 빌드하기
 
-Xcode(macOS 14 SDK 이상)와 Apple Silicon Mac이 필요합니다.
+Xcode 26 이상(앱 아이콘 `.icon` 문서를 빌드하려면 필요)과 Apple Silicon Mac이 필요합니다.
 
 ```bash
 scripts/fetch-binaries.sh   # yt-dlp, Python, deno 받기(버전·체크섬 고정)
@@ -66,4 +66,4 @@ xcodebuild -project Stow.xcodeproj -scheme Stow -destination 'platform=macOS,arc
 scripts/release.sh          # 배포용 DMG(build/release/)
 ```
 
-앱 아이콘은 Icon Composer 문서 `Stow/AppIcon.icon`입니다(Xcode의 Icon Composer로 엽니다). 일반·다크·색조·투명 모양을 담고 있고, macOS 14~25용 아이콘은 빌드할 때 Xcode가 여기서 만듭니다.
+앱 아이콘은 Icon Composer 문서 `Stow/AppIcon.icon`입니다(Xcode의 Icon Composer로 엽니다). 일반·다크·색조·투명 모양을 담고 있고, macOS 14·15용 아이콘은 빌드할 때 Xcode가 여기서 만듭니다.

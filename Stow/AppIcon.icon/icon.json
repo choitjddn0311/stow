@@ -2,6 +2,9 @@
   "fill" : {
     "automatic-gradient" : "srgb:0.07059,0.56471,0.49804,1.00000"
   },
+  "fill-specializations" : [
+    { "appearance" : "dark", "value" : "system-dark" }
+  ],
   "groups" : [
     {
       "name" : "Glyphs",
