@@ -22,6 +22,13 @@ struct StowSmokeTests {
         #expect(parts.dropFirst().allSatisfy { $0 == 0 })
     }
 
+    /// 앱 새 버전 확인: 자동 확인을 켜고 1시간마다(릴리스 직후 알림이 뜨도록).
+    /// 3600초는 Sparkle이 허용하는 가장 짧은 주기다.
+    @Test func sparkleChecksHourly() throws {
+        #expect(Bundle.main.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool == true)
+        #expect(Bundle.main.object(forInfoDictionaryKey: "SUScheduledCheckInterval") as? Int == 3600)
+    }
+
     /// 루트 화면을 실제 앱과 같은 방식(`NSHostingView`)으로 그려 내용이 그려지는지 확인한다(이용 고지, 추출 화면 각각).
     ///
     /// `ImageRenderer`는 쓰지 않는다. TextField 같은 기본 컨트롤을 그리지 못하고 SwiftUI 런타임 이슈

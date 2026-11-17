@@ -13,7 +13,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>
-	<integer>86400</integer>
+	<integer>3600</integer>
 	<!-- release.sh가 appcast.xml에 EdDSA 서명을 넣는다. 서명이 없거나 맞지 않는 업데이트 목록은 받지 않는다. -->
 	<key>SURequireSignedFeed</key>
 	<true/>
