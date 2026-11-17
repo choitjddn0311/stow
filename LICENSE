@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This license covers Stow's own source code. The app bundle also includes
-third-party components (yt-dlp, Python, deno, FFmpeg, LAME, Sparkle,
-KeyboardShortcuts) that remain under their own licenses. See README.md
-("오픈소스 구성 요소" / "Open-source components") and the in-app
-"Open Source Licenses" window.
