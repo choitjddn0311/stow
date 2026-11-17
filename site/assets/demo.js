@@ -13,8 +13,9 @@
     unavailable: "영상 정보를 불러오지 못했습니다. 비공개·삭제된 영상이거나 외부 표시가 막힌 영상일 수 있습니다.",
     network: "영상 정보를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.",
     video: "영상", playlist: "재생목록",
-    extractAs: { MP3: "MP3로 추출", WAV: "WAV로 추출", FLAC: "FLAC으로 추출" },
+    extractAs: { MP3: "MP3로 추출", WAV: "WAV로 추출", FLAC: "FLAC으로 추출", MP4: "MP4로 받기" },
     downloading: p => `다운로드 중 ${p}%`, converting: "변환 중…",
+    videoPart: p => `영상 받는 중 ${p}%`, audioPart: p => `오디오 받는 중 ${p}%`, merging: "영상과 오디오를 합치는 중…",
     saved: "저장했습니다 (예시)", folder: "폴더에 재생목록 영상을 저장합니다",
   } : {
     invalid: "That's not a YouTube video link. Please check the address.",
@@ -23,14 +24,15 @@
     unavailable: "Couldn't load the video info. It may be private, deleted, or blocked from being shown on other sites.",
     network: "Couldn't load the video info. Check your internet connection.",
     video: "Video", playlist: "Playlist",
-    extractAs: { MP3: "Extract as MP3", WAV: "Extract as WAV", FLAC: "Extract as FLAC" },
+    extractAs: { MP3: "Extract as MP3", WAV: "Extract as WAV", FLAC: "Extract as FLAC", MP4: "Download as MP4" },
     downloading: p => `Downloading ${p}%`, converting: "Converting…",
+    videoPart: p => `Downloading video ${p}%`, audioPart: p => `Downloading audio ${p}%`, merging: "Joining video and audio…",
     saved: "Saved (demo)", folder: "Playlist videos go into this folder",
   };
 
   const $ = sel => root.querySelector(sel);
   const input = $("#demo-url"), form = $("#demo-form"), msg = $("#demo-msg"), meta = $("#demo-meta"),
-    opts = $("#demo-opts"), go = $("#demo-go"), quality = $("#demo-quality"), job = $("#demo-job"),
+    opts = $("#demo-opts"), go = $("#demo-go"), quality = $("#demo-quality"), resolution = $("#demo-resolution"), job = $("#demo-job"),
     fill = $("#demo-fill"), jobText = $("#demo-jobtext"), pct = $("#demo-pct"), done = $("#demo-done"),
     file = $("#demo-file"), again = $("#demo-again"), example = $("#demo-example");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -131,6 +133,7 @@
     format = f;
     root.querySelectorAll("[data-format]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.format === f)));
     quality.hidden = f !== "MP3";
+    resolution.hidden = f !== "MP4";
     go.textContent = T.extractAs[f];
   }
 
@@ -150,16 +153,25 @@
       go.disabled = false;
     };
     if (reduce) { finish(); return; }
-    let p = 0;
+    // 영상(MP4)은 앱처럼 영상 → 오디오를 따로 받아(막대 하나에 85%·15% 몫으로 이어서) 합친다.
+    const video = format === "MP4";
+    const phases = video
+      ? [{ text: T.videoPart, from: 0, to: 85 }, { text: T.audioPart, from: 85, to: 100 }]
+      : [{ text: T.downloading, from: 0, to: 100 }];
+    let phase = 0, p = 0;
     fill.style.width = "0%";
     const step = () => {
       if (my !== run) return;
-      p = Math.min(100, p + 4 + Math.round(Math.random() * 6));
-      fill.style.width = p + "%"; jobText.textContent = T.downloading(p); pct.textContent = p + "%";
-      if (p < 100) setTimeout(step, 90);
-      else { jobText.textContent = T.converting; pct.textContent = ""; setTimeout(finish, 700); }
+      p = Math.min(100, p + 5 + Math.round(Math.random() * 8));
+      const ph = phases[phase];
+      fill.style.width = (ph.from + (ph.to - ph.from) * p / 100) + "%";
+      jobText.textContent = ph.text(p); pct.textContent = p + "%";
+      if (p < 100) { setTimeout(step, 90); return; }
+      if (++phase < phases.length) { p = 0; setTimeout(step, 150); return; }
+      jobText.textContent = video ? T.merging : T.converting; pct.textContent = "";
+      setTimeout(finish, 700);
     };
-    jobText.textContent = T.downloading(0); pct.textContent = "0%";
+    jobText.textContent = phases[0].text(0); pct.textContent = "0%";
     setTimeout(step, 150);
   }
 

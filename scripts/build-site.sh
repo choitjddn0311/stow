@@ -19,7 +19,7 @@ fi
 rm -rf "$out"
 mkdir -p "$out/images"
 cp -R "$REPO_ROOT/site/." "$out/"
-for name in icon main-light main-dark panel-light panel-dark playlist-light; do
+for name in icon main-light main-dark panel-light panel-dark playlist-light video-light video-dark; do
   [[ -f $REPO_ROOT/docs/images/$name.png ]] || die "docs/images/$name.png가 없습니다."
   cp "$REPO_ROOT/docs/images/$name.png" "$out/images/"
 done

@@ -4,9 +4,9 @@
 
 # Stow
 
-**유튜브 링크를 붙여 넣으면 오디오를 MP3·WAV·FLAC으로 저장하는 macOS 앱**
+**유튜브 링크를 붙여 넣으면 오디오(MP3·WAV·FLAC)나 영상(MP4)으로 저장하는 macOS 앱**
 
-광고도, 회원가입도, 수시로 바뀌는 다운로드 사이트도 없이 내 Mac에서 바로 추출합니다.
+광고도, 회원가입도, 수시로 바뀌는 다운로드 사이트도 없이 내 Mac에서 바로 받습니다.
 
 [![최신 버전](https://img.shields.io/github/v/release/choitjddn0311/stow?label=%EC%B5%9C%EC%8B%A0%20%EB%B2%84%EC%A0%84&color=12907F)](https://github.com/choitjddn0311/stow/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555?logo=apple)](#필요-환경)
@@ -24,14 +24,15 @@
 
 ## 왜 Stow인가요?
 
-유튜브 오디오 추출 사이트는 광고가 많고, 주소가 자주 바뀌어 꾸준히 쓰기 어렵습니다.
-Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣으면 원하는 음질과 위치로 바로 저장합니다.
+유튜브 다운로드 사이트는 광고가 많고, 주소가 자주 바뀌어 꾸준히 쓰기 어렵습니다.
+Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣으면 원하는 포맷과 위치로 바로 저장합니다.
 영상 편집자와 크리에이터가 작업 중에 빠르게 쓸 수 있도록 만들었습니다.
 
 ## 주요 기능
 
 - **붙여 넣기만 하면 끝** — 주소를 붙여 넣으면 제목·채널·길이·썸네일을 자동으로 불러옵니다
 - **원하는 포맷과 음질** — MP3(128/192/320kbps), WAV, FLAC. 제목·아티스트 같은 메타데이터를 함께 넣습니다
+- **영상도 그대로** — 편집 프로그램에서 바로 열리는 MP4(1080p까지)나 최고 화질(4K까지)로 받습니다. 다시 인코딩하지 않아 화질이 떨어지지 않습니다
 - **대기열과 재생목록** — 여러 영상을 넣으면 차례로 추출하고, 재생목록은 원하는 영상만 골라 한 번에 담습니다
 - **어디서든 빠른 추출** — 단축키 ⌥⌘Y로 어느 앱에서든 작은 패널을 열고, 클립보드의 주소를 바로 불러옵니다
 - **알아서 최신 상태 유지** — 앱 새 버전을 알려 주고, 추출 엔진(yt-dlp)은 유튜브가 바뀌어도 자동으로 업데이트합니다
@@ -76,6 +77,20 @@ Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣�
 추출 중에도 다른 영상을 계속 넣을 수 있습니다. 대기열에 차례로 쌓이고 하나씩 처리됩니다.
 대기열 항목을 오른쪽 클릭하면 다시 시도·Finder에서 보기·제목이나 주소 복사를 할 수 있습니다.
 
+### 영상 받기
+
+"출력"의 **종류**를 **영상**으로 바꾸면 영상 파일로 받습니다. 오디오와 영상 설정은 따로 기억합니다.
+
+- **MP4**: Premiere·Final Cut 같은 편집 프로그램과 QuickTime에서 바로 열리는 H.264 영상입니다. 유튜브가 H.264를 1080p까지만 제공해 해상도는 1080p·720p·480p 중에서 고릅니다.
+- **최고 화질**: 4K 이상까지 가장 높은 화질로 받습니다. 대부분 AV1 코덱의 MP4이며, QuickTime에서는 M3 이후 Mac에서 열립니다. 일부 영상은 WebM·MKV로 받으며 IINA·VLC 같은 플레이어가 필요할 수 있습니다.
+
+고른 해상도가 없는 영상은 그보다 낮은 것 중 가장 높은 해상도로 받습니다. 영상과 오디오를 따로 받은 뒤 다시 인코딩하지 않고 한 파일로 합칩니다.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/video-dark.png">
+  <img src="docs/images/video-light.png" width="600" alt="종류를 영상으로 바꾼 출력 설정과 영상을 받는 대기열">
+</picture>
+
 ### 재생목록에서 골라 받기
 
 재생목록 주소를 붙여 넣으면 영상 목록이 나옵니다. 받을 영상만 체크하고 추출하면
@@ -89,12 +104,13 @@ Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣�
 
 어느 앱에서든 **⌥⌘Y**(설정에서 변경)를 누르면 작은 패널이 뜹니다.
 클립보드에 유튜브 주소가 있으면 자동으로 채워 불러오고, **Return**을 누르면 지금 설정으로 대기열에 넣고 패널이 닫힙니다.
-패널 아래의 칩으로 포맷과 저장 위치(최근 폴더 최대 5개)를 바로 바꿀 수 있습니다.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/panel-dark.png">
   <img src="docs/images/panel-light.png" width="600" alt="빠른 추출 패널">
 </picture>
+
+패널 아래 줄 맨 왼쪽에서 오디오·영상을 바꾸고, 그 옆 칩으로 포맷과 저장 위치(최근 폴더 최대 5개)를 바로 바꿀 수 있습니다.
 
 창을 닫아도 Stow는 메뉴 막대에 남아 단축키가 동작합니다. 완전히 끝내려면 ⌘Q나 메뉴 막대 메뉴의 "Stow 종료"를 쓰세요.
 
@@ -151,9 +167,10 @@ Stow는 계정·로그인·분석 도구가 없고, 모든 처리는 내 Mac에�
 
 ## 이용 안내
 
-Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영상의 오디오를 추출하는 도구입니다.
+Stow는 본인이 저작권을 가지고 있거나 사용 허락을 받은 영상과 그 오디오를 내려받는 도구입니다.
 다른 사람의 저작물을 허락 없이 내려받거나 배포하면 저작권법이나 YouTube 이용약관을 위반할 수 있으며,
 그에 따른 책임은 사용자에게 있습니다.
+Stow 개발자는 사용자가 Stow로 내려받은 콘텐츠와 그 사용에 대해 어떠한 법적 책임도 지지 않습니다.
 
 ## 오픈소스 구성 요소
 
@@ -164,7 +181,7 @@ Stow는 아래 오픈소스 프로그램을 앱 안에 함께 넣어 실행합�
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) (zipimport 버전) | 영상 정보 조회, 다운로드 | Unlicense (MIT·ISC 포함 코드 일부) |
 | [Python](https://www.python.org) ([python-build-standalone](https://github.com/astral-sh/python-build-standalone)) | yt-dlp 실행 | PSF 라이선스 등 |
 | [deno](https://deno.com) | 유튜브 JavaScript 처리 | MIT |
-| [FFmpeg](https://ffmpeg.org) | 오디오 변환 | LGPL 2.1 이상 |
+| [FFmpeg](https://ffmpeg.org) | 오디오 변환, 영상·오디오 합치기 | LGPL 2.1 이상 |
 | [LAME](https://lame.sourceforge.io) | MP3 인코딩 | LGPL |
 | [Sparkle](https://sparkle-project.org) | 앱 자동 업데이트 | MIT (포함된 bsdiff·ed25519 등은 BSD·zlib 계열) |
 | [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | 빠른 추출 전역 단축키 | MIT |

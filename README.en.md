@@ -4,7 +4,7 @@
 
 # Stow
 
-**A native macOS app that saves YouTube audio as MP3, WAV, or FLAC — just paste a link**
+**A native macOS app that saves YouTube audio (MP3, WAV, FLAC) or video (MP4) — just paste a link**
 
 No ads, no sign-ups, no shady download sites that change their address every week. Everything runs on your Mac.
 
@@ -26,14 +26,15 @@ No ads, no sign-ups, no shady download sites that change their address every wee
 
 ## Why Stow?
 
-YouTube-to-audio websites are full of ads and keep moving to new domains, so they are hard to rely on.
-Stow is a local Mac app: paste a link and it saves the audio in the format, quality, and folder you choose.
-It is built for video editors and creators who need audio quickly while they work.
+YouTube download websites are full of ads and keep moving to new domains, so they are hard to rely on.
+Stow is a local Mac app: paste a link and it saves the audio or video in the format, quality, and folder you choose.
+It is built for video editors and creators who need audio and footage quickly while they work.
 
 ## Features
 
 - **Paste and go** — title, channel, duration, and thumbnail load automatically
 - **Your format, your quality** — MP3 (128/192/320 kbps), WAV, FLAC, with title and artist metadata embedded
+- **Video, too** — save as editor-friendly MP4 (up to 1080p) or best quality (up to 4K), without re-encoding
 - **Queue and playlists** — add as many videos as you like; pick only the videos you want from a playlist
 - **Quick extract from anywhere** — press ⌥⌘Y in any app to open a small panel that picks up the link on your clipboard
 - **Stays up to date** — new app versions are offered in-app, and the extraction engine (yt-dlp) updates itself when YouTube changes
@@ -78,6 +79,20 @@ After that, Stow opens normally and installs new versions from inside the app.
 You can keep adding videos while one is extracting; they line up in the queue and run one at a time.
 Right-click a queue item to retry it, show it in Finder, or copy its title or link.
 
+### Download video
+
+Set **Type** under "Output" to **Video** to save video files. Audio and video settings are remembered separately.
+
+- **MP4**: H.264 video that opens right away in editors like Premiere and Final Cut, and in QuickTime. YouTube only offers H.264 up to 1080p, so you choose 1080p, 720p, or 480p.
+- **Best quality**: the highest quality available, up to 4K and beyond. Usually an AV1 MP4, which QuickTime plays on Macs with M3 or later. Some videos come as WebM or MKV and may need a player such as IINA or VLC.
+
+If a video doesn't have the resolution you chose, Stow takes the highest one below it. Video and audio are downloaded separately and joined into one file without re-encoding.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/video-dark.png">
+  <img src="docs/images/video-light.png" width="600" alt="Output settings with Type set to Video, and a queue downloading videos">
+</picture>
+
 ### Pick videos from a playlist
 
 Paste a playlist link and Stow lists its videos. Check the ones you want and extract —
@@ -91,7 +106,7 @@ they are saved into a folder named after the playlist. Private and deleted video
 
 Press **⌥⌘Y** (changeable in Settings) in any app to open a small panel.
 If your clipboard holds a YouTube link, Stow fills it in and loads it; press **Return** to add it to the queue and close the panel.
-The chips at the bottom switch the format and save folder (up to 5 recent folders) on the spot.
+The switch at the far left of the bottom row picks audio or video, and the chips next to it change the format and save folder (up to 5 recent folders) on the spot.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/panel-dark.png">
@@ -153,9 +168,10 @@ No personal information such as your name or files is sent, but GitHub sees your
 
 ## Acceptable use
 
-Stow is a tool for extracting audio from videos you own or have permission to use.
+Stow is a tool for downloading videos, and their audio, that you own or have permission to use.
 Downloading or distributing other people's work without permission may violate copyright law or YouTube's Terms of Service,
 and you are responsible for how you use it.
+The developer of Stow accepts no legal liability for content you download with Stow or for how you use it.
 
 ## Open-source components
 
@@ -166,7 +182,7 @@ Stow bundles and runs the following open-source software. Their licenses are sho
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) (zipimport build) | Video info and download | Unlicense (some MIT/ISC code) |
 | [Python](https://www.python.org) ([python-build-standalone](https://github.com/astral-sh/python-build-standalone)) | Runs yt-dlp | PSF License and others |
 | [deno](https://deno.com) | YouTube JavaScript handling | MIT |
-| [FFmpeg](https://ffmpeg.org) | Audio conversion | LGPL 2.1 or later |
+| [FFmpeg](https://ffmpeg.org) | Audio conversion, joining video and audio | LGPL 2.1 or later |
 | [LAME](https://lame.sourceforge.io) | MP3 encoding | LGPL |
 | [Sparkle](https://sparkle-project.org) | App updates | MIT (bundled bsdiff, ed25519, etc. are BSD/zlib-style) |
 | [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | Global shortcut for quick extract | MIT |

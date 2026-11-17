@@ -134,7 +134,8 @@ h2 { font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; margin: 0; text
 .row p { font-size: 18px; line-height: 1.6; color: var(--muted); margin: 16px 0 0; max-width: 28em; }
 .row .playlist { max-width: 440px; margin: 0 auto; width: 100%; }
 kbd { font-family: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px 32px; padding-block: 88px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px 32px; padding-block: 88px; }
+@media (max-width: 1000px) { .grid { grid-template-columns: repeat(2, 1fr); } }
 .grid h3 { font-size: 19px; margin: 0 0 8px; }
 .grid p { margin: 0; color: var(--muted); line-height: 1.6; font-size: 15px; }
 
