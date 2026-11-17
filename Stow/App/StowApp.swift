@@ -9,7 +9,8 @@ struct StowApp: App {
     @State private var coordinator: AppCoordinator
     @State private var engineUpdates: EngineUpdateCoordinator?
     private let engineError: EngineError?
-    /// Sparkle 앱 자동 업데이트(하루 한 번 확인 후 설치 여부를 묻는다. 설정은 Config/Stow-Info.plist).
+    /// Sparkle 앱 자동 업데이트(1시간마다와 앱을 시작할 때 확인하고, 새 버전이 있으면 설치 여부를 묻는다.
+    /// 설정은 Config/Stow-Info.plist).
     /// 테스트 호스트나 배포 전 실행 확인(release.sh) 때는 시작하지 않는다.
     private let updaterController: SPUStandardUpdaterController
 
@@ -57,7 +58,16 @@ struct StowApp: App {
         // 창이 아니라 앱 시작에 연결한다.
         AppDelegate.queue = coordinator.queue
         let startUpdaters = !Self.updatersDisabled
-        AppDelegate.onLaunch = { if startUpdaters { engineUpdates?.start() } }
+        let appUpdater = updaterController.updater
+        AppDelegate.onLaunch = {
+            guard startUpdaters else { return }
+            engineUpdates?.start()
+            // 릴리스 직후 앱을 켠 사용자에게 바로 알리도록 시작할 때도 확인한다(주기 확인은 1시간).
+            // 사용자가 자동 확인을 꺼 두었으면 하지 않는다. 새 버전이 없으면 아무것도 띄우지 않는다.
+            if appUpdater.automaticallyChecksForUpdates {
+                appUpdater.checkForUpdatesInBackground()
+            }
+        }
     }
 
     var body: some Scene {

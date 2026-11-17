@@ -67,6 +67,7 @@ write_appcast() {
   local file=$1 signature=$2 length=$3 pub_date notes_html
   pub_date=$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")
   # 변경 사항(마크다운의 제목·글머리표·번호 목록·굵게·코드·링크)을 Sparkle 업데이트 창용 간단한 HTML로 바꾼다.
+  # 목록은 들여쓰기 2칸마다 한 단계씩 하위 목록으로 넣는다(예: "- 항목" 아래 "  - 하위 항목").
   notes_html=""
   if [[ -f $CHANGES ]]; then
     notes_html=$(perl -CSD -ne '
@@ -74,11 +75,20 @@ write_appcast() {
       s/&/&amp;/g; s/</&lt;/g; s/>/&gt;/g;
       s/\*\*(.+?)\*\*/<b>$1<\/b>/g; s/`([^`]+)`/<code>$1<\/code>/g;
       s/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/<a href="$2">$1<\/a>/g;
-      my ($kind, $item) = /^- (.*)/ ? ("ul", $1) : /^\d+\. (.*)/ ? ("ol", $1) : ("", "");
-      if ($open && $open ne $kind) { print "</$open>"; $open = "" }
-      if ($kind) { print "<$kind>" unless $open; $open = $kind; print "<li>$item</li>"; next }
+      my ($indent, $kind, $item) = /^( *)- (.*)/ ? ($1, "ul", $2) : /^( *)\d+\. (.*)/ ? ($1, "ol", $2) : ("", "", "");
+      if ($kind) {
+        my $level = int(length($indent) / 2);
+        $level = scalar(@open) if $level > scalar(@open);  # 한 번에 한 단계만 내려간다
+        # 더 깊은 목록을 닫고, 같은 단계의 항목은 닫은 뒤 새 항목을 연다.
+        while (@open > $level + 1) { print "</li></" . pop(@open) . ">" }
+        if (@open == $level + 1 && $open[-1] ne $kind) { print "</li></" . pop(@open) . ">" }
+        if (@open == $level + 1) { print "</li>" } else { print "<$kind>"; push @open, $kind }
+        print "<li>$item";
+        next;
+      }
+      while (@open) { print "</li></" . pop(@open) . ">" }
       if (/^#+ (.*)/) { print "<h3>$1</h3>" } else { print "<p>$_</p>" }
-      END { print "</$open>" if $open }' "$CHANGES") || die "변경 사항(${CHANGES})을 HTML로 바꾸지 못했습니다."
+      END { while (@open) { print "</li></" . pop(@open) . ">" } }' "$CHANGES") || die "변경 사항(${CHANGES})을 HTML로 바꾸지 못했습니다."
   else
     log "주의: 변경 사항 파일(${CHANGES})이 없어 업데이트 창에 변경 사항이 보이지 않습니다."
   fi
