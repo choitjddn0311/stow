@@ -13,7 +13,7 @@
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2B-555)](#필요-환경)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[**다운로드**](https://github.com/choitjddn0311/stow/releases/latest) · [사용법](#사용법) · [자주 묻는 질문](#자주-묻는-질문) · [English](README.en.md)
+[**다운로드**](https://github.com/choitjddn0311/stow/releases/latest) · [웹사이트](https://choitjddn0311.github.io/stow/) · [사용법](#사용법) · [자주 묻는 질문](#자주-묻는-질문) · [English](README.en.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">

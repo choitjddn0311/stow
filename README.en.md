@@ -13,7 +13,7 @@ No ads, no sign-ups, no shady download sites that change their address every wee
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2B-555)](#requirements)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[**Download**](https://github.com/choitjddn0311/stow/releases/latest) · [Usage](#usage) · [FAQ](#faq) · [한국어](README.md)
+[**Download**](https://github.com/choitjddn0311/stow/releases/latest) · [Website](https://choitjddn0311.github.io/stow/en/) · [Usage](#usage) · [FAQ](#faq) · [한국어](README.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">

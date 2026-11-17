@@ -1,0 +1,39 @@
+name: Pages
+
+# 소개 웹페이지(site/ + docs/images 스크린샷)를 GitHub Pages에 배포한다.
+# main에 병합되어 웹페이지나 스크린샷이 바뀌었을 때, 또는 직접 실행했을 때만 돈다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - docs/images/**
+      - scripts/build-site.sh
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site
+        run: scripts/build-site.sh "$RUNNER_TEMP/site"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+      - id: deployment
+        uses: actions/deploy-pages@v4

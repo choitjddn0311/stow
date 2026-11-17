@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stow — Save YouTube audio on your Mac</title>
+<meta name="description" content="A free, open-source macOS app that saves YouTube audio as MP3, WAV, or FLAC. Just paste a link.">
+<meta property="og:title" content="Stow — Save YouTube audio on your Mac">
+<meta property="og:description" content="Paste a link, get MP3, WAV, or FLAC. No ads, no sign-ups.">
+<meta property="og:image" content="https://choitjddn0311.github.io/stow/images/main-light.png">
+<meta property="og:type" content="website">
+<link rel="alternate" hreflang="ko" href="https://choitjddn0311.github.io/stow/">
+<link rel="icon" type="image/png" href="../images/icon.png">
+<link rel="apple-touch-icon" href="../images/icon.png">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="wrap">
+  <nav>
+    <a class="brand" href="./"><img src="../images/icon.png" alt="">Stow</a>
+    <span class="links">
+      <a class="hide-narrow" href="#try">Try it</a>
+      <a class="hide-narrow" href="#install">Install</a>
+      <a href="https://github.com/choitjddn0311/stow">GitHub</a>
+      <a href="../" hreflang="ko" lang="ko">한국어</a>
+    </span>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <img class="icon" src="../images/icon.png" alt="Stow app icon" width="112" height="112">
+    <h1>One link.<br>The audio, on your Mac.</h1>
+    <p class="lead">Paste a YouTube link and save it as MP3, WAV, or FLAC. No ads, no sign-ups, no download sites that change their address every week.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/choitjddn0311/stow/releases/latest">Download free</a>
+      <a class="tlink" href="#try">Try it here ›</a>
+    </div>
+    <p class="req">macOS 14 or later · Apple Silicon · Open source (MIT)</p>
+    <img class="shot only-light" src="../images/main-light.png" alt="Stow main window: loaded video info, output settings, and the extraction queue" width="668" height="860">
+    <img class="shot only-dark" src="../images/main-dark.png" alt="Stow main window: loaded video info, output settings, and the extraction queue" width="668" height="860">
+  </div>
+
+  <section class="wrap try" id="try">
+    <div class="head">
+      <p class="eyebrow">Try it</p>
+      <h2>Paste, pick, done.</h2>
+      <p class="section-lead">Enter a YouTube link to see what Stow does, right on this page. No file is actually saved. <span lang="ko">(The app itself is in Korean.)</span></p>
+    </div>
+    <div class="win" id="demo">
+      <div class="tb" aria-hidden="true"><i></i><i></i><i></i><span>Stow</span></div>
+      <div class="body">
+        <form class="urlrow" id="demo-form">
+          <input id="demo-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste a YouTube video or playlist link" aria-label="YouTube link">
+          <button type="submit">Load</button>
+        </form>
+        <p class="hint">No link handy? <button type="button" class="linkbtn" id="demo-example" data-url="https://www.youtube.com/watch?v=jNQXAC9IVRw">Try an example</button></p>
+        <p class="msg" id="demo-msg" role="alert" hidden></p>
+        <div class="meta" id="demo-meta" aria-live="polite" hidden></div>
+        <div class="opts" id="demo-opts" hidden>
+          <div class="left">
+            <div class="seg" role="group" aria-label="Format">
+              <button type="button" data-format="MP3" aria-pressed="true">MP3</button>
+              <button type="button" data-format="WAV" aria-pressed="false">WAV</button>
+              <button type="button" data-format="FLAC" aria-pressed="false">FLAC</button>
+            </div>
+            <select id="demo-quality" aria-label="Quality">
+              <option>320 kbps</option><option>192 kbps</option><option>128 kbps</option>
+            </select>
+          </div>
+          <button type="button" class="go" id="demo-go">Extract as MP3</button>
+        </div>
+        <div class="job" id="demo-job" hidden>
+          <div class="t"><span id="demo-jobtext">Downloading 0%</span><span id="demo-pct">0%</span></div>
+          <div class="track"><div class="fill" id="demo-fill"></div></div>
+        </div>
+        <div class="job done" id="demo-done" hidden>
+          <div class="ok">Saved (demo)</div>
+          <div class="file" id="demo-file"></div>
+          <div class="row">
+            <a class="btn" href="https://github.com/choitjddn0311/stow/releases/latest">Get Stow to save it for real</a>
+            <button type="button" class="sbtn" id="demo-again">Try another link</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="cap">This is a demo; nothing is actually extracted. Video info is fetched by your browser directly from YouTube, and the link you enter isn't sent anywhere else.</p>
+  </section>
+
+  <div class="band">
+    <div class="wrap">
+      <div class="row">
+        <div>
+          <p class="eyebrow">Quick extract</p>
+          <h2>From any app, <kbd>⌥⌘Y</kbd></h2>
+          <p>Press the shortcut and a small panel opens with the link from your clipboard already loaded. Hit Return to queue it with your current settings and the panel closes. Change the format and folder with the chips at the bottom.</p>
+        </div>
+        <div>
+          <img class="only-light" src="../images/panel-light.png" alt="Quick extract panel" width="600" height="176">
+          <img class="only-dark" src="../images/panel-dark.png" alt="Quick extract panel" width="600" height="176">
+        </div>
+      </div>
+      <div class="row rev">
+        <div>
+          <p class="eyebrow">Queue and playlists</p>
+          <h2>Pick the videos you want, get them all at once.</h2>
+          <p>Add several videos and they're extracted one after another. For a playlist, check just the videos you want and they're saved together in a folder named after the playlist.</p>
+        </div>
+        <div><img class="playlist" src="../images/playlist-light.png" alt="Choosing videos from a playlist" width="668" height="820"></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="wrap grid" aria-label="Features">
+    <div><h3>Your format, your quality</h3><p>MP3 at 128, 192, or 320 kbps, WAV, or FLAC, with title and artist metadata embedded.</p></div>
+    <div><h3>Stays up to date</h3><p>New app versions are offered in-app, and the extraction engine (yt-dlp) updates itself when YouTube changes.</p></div>
+    <div><h3>Safe saving</h3><p>Never overwrites a file with the same name; it adds a number instead. Remembers your folder and format.</p></div>
+    <div><h3>Paste and go</h3><p>Title, channel, duration, and thumbnail load as soon as you paste a link.</p></div>
+    <div><h3>Feels like macOS</h3><p>System Settings–style layout, light and dark mode, full keyboard control, VoiceOver support.</p></div>
+    <div><h3>Runs on your Mac</h3><p>No account, no server. Audio is converted on your Mac and saved to the folder you choose.</p></div>
+  </section>
+
+  <section class="wrap install" id="install">
+    <div>
+      <p class="eyebrow">Install</p>
+      <h2>Allow it once, and you're set.</h2>
+      <p class="section-lead">Stow isn't signed or notarized by Apple yet, so macOS asks you to confirm the first time you open it.</p>
+    </div>
+    <ol>
+      <li>Download <b>Stow-&lt;version&gt;.dmg</b> from <a href="https://github.com/choitjddn0311/stow/releases/latest">Releases</a>, open it, and drag Stow into Applications.</li>
+      <li><b>macOS 15 or later</b>: opening Stow shows a warning. Click "Done", then go to <b>System Settings → Privacy &amp; Security</b> and click "Open Anyway". Open Stow again and click "Open".</li>
+      <li><b>macOS 14</b>: Control-click Stow in Applications → "Open" → click "Open" in the warning.</li>
+      <li>After that it opens normally, and new versions install from inside the app.</li>
+    </ol>
+  </section>
+
+  <section class="end">
+    <div class="wrap">
+      <h2>Get it free.</h2>
+      <div class="cta"><a class="btn" href="https://github.com/choitjddn0311/stow/releases/latest">Download Stow</a><a class="tlink" href="https://github.com/choitjddn0311/stow">View on GitHub ›</a></div>
+      <p class="req">macOS 14 or later · Apple Silicon (M1 or later)</p>
+      <p class="fine">Use Stow only for content you have the rights to. Stow is not affiliated with YouTube or Google.<br>© choitjddn0311 · <a href="https://github.com/choitjddn0311/stow/blob/main/LICENSE">MIT License</a></p>
+    </div>
+  </section>
+</main>
+<script src="../assets/demo.js" defer></script>
+</body>
+</html>
