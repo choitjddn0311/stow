@@ -12,16 +12,11 @@ public class AppInfoTests
     }
 
     [Theory]
-    [InlineData(0, 1, 0, 0, "0.1.0")]
-    [InlineData(1, 2, 3, 45, "1.2.3")]
-    public void DisplayVersionDropsRevision(int major, int minor, int build, int revision, string expected)
+    [InlineData("0.1.0", "0.1.0")]
+    [InlineData("0.1.0+4938ae6c1f", "0.1.0")]
+    [InlineData("0.2.0-beta.1+abc", "0.2.0-beta.1")]  // 프리릴리스 표시는 남긴다
+    public void DisplayVersionDropsBuildMetadata(string informational, string expected)
     {
-        Assert.Equal(expected, AppInfo.DisplayVersion(new Version(major, minor, build, revision)));
-    }
-
-    [Fact]
-    public void DisplayVersionWithoutBuildNumber()
-    {
-        Assert.Equal("0.1.0", AppInfo.DisplayVersion(new Version(0, 1)));
+        Assert.Equal(expected, AppInfo.DisplayVersion(informational));
     }
 }

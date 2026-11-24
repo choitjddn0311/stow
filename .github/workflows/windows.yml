@@ -20,6 +20,17 @@ concurrency:
 jobs:
   windows-build:
     runs-on: windows-2025
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            platform: x64
+            artifact: Stow-windows-x64
+          - rid: win-arm64
+            platform: ARM64
+            artifact: Stow-windows-arm64
     defaults:
       run:
         working-directory: windows
@@ -31,25 +42,19 @@ jobs:
         with:
           global-json-file: windows/global.json
 
+      # 공통 로직 테스트는 플랫폼과 무관하므로 x64에서 한 번만 돌린다.
       - name: Test core
+        if: matrix.rid == 'win-x64'
         run: dotnet test --project tests/Stow.Core.Tests -c Release
 
-      - name: Publish app (x64, ARM64)
+      - name: Publish app (${{ matrix.rid }})
         run: |
-          foreach ($arch in @(@{ Rid = 'win-x64'; Platform = 'x64' }, @{ Rid = 'win-arm64'; Platform = 'ARM64' })) {
-            dotnet publish src/Stow.App/Stow.App.csproj -c Release -r $arch.Rid -p:Platform=$($arch.Platform) --self-contained -o "out/$($arch.Rid)"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            if (-not (Test-Path "out/$($arch.Rid)/Stow.exe")) { Write-Error "out/$($arch.Rid)/Stow.exe 없음"; exit 1 }
-          }
+          dotnet publish src/Stow.App/Stow.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} --self-contained -o out/${{ matrix.rid }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "out/${{ matrix.rid }}/Stow.exe")) { Write-Error "out/${{ matrix.rid }}/Stow.exe 없음"; exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Stow-windows-x64
-          path: windows/out/win-x64
-          retention-days: 14
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Stow-windows-arm64
-          path: windows/out/win-arm64
+          name: ${{ matrix.artifact }}
+          path: windows/out/${{ matrix.rid }}
           retention-days: 14

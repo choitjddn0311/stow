@@ -11,6 +11,13 @@ public static class AppInfo
     /// </summary>
     public static string DataDirectory(string localAppData) => Path.Combine(localAppData, Name);
 
-    /// <summary>화면에 보일 버전. 예: "0.1.0"(빌드 번호는 뺀다)</summary>
-    public static string DisplayVersion(Version version) => $"{version.Major}.{version.Minor}.{Math.Max(version.Build, 0)}";
+    /// <summary>
+    /// 화면에 보일 버전. 프로젝트의 &lt;Version&gt; 그대로인 InformationalVersion에서 빌드 메타데이터(<c>+커밋</c>)만 뗀다.
+    /// 예: "0.2.0-beta.1+abc123" → "0.2.0-beta.1"
+    /// </summary>
+    public static string DisplayVersion(string informationalVersion)
+    {
+        var plus = informationalVersion.IndexOf('+');
+        return plus >= 0 ? informationalVersion[..plus] : informationalVersion;
+    }
 }
