@@ -41,6 +41,17 @@ toolchain() {
   echo "$dir/bin"
 }
 
+# 정적 라이브러리의 오브젝트가 대상 아키텍처인지 확인한다.
+check_lib() {
+  local formats
+  formats=$(llvm-objdump -f "$1" | sed -n 's/.*file format //p' | sort -u | tr '\n' ' ')
+  log "$(basename "$1"): $formats"
+  case $ARCH in
+    x86_64) [[ $formats == "coff-x86-64 " ]] || die "$(basename "$1")가 x64가 아닙니다: $formats" ;;
+    aarch64) [[ $formats == "coff-arm64 " ]] || die "$(basename "$1")가 ARM64가 아닙니다: $formats" ;;
+  esac
+}
+
 build() {
   local bin src work stage
   bin=$(toolchain)
@@ -85,6 +96,14 @@ build() {
     make -j"$JOBS" >/dev/null
     make install >/dev/null
   )
+
+  check_lib "$stage/lib/libmp3lame.a"
+  check_lib "$stage/lib/libz.a"
+  # ffmpeg configure와 같은 방식(CPATH·LIBRARY_PATH)으로 LAME을 링크해 본다.
+  printf '#include <lame/lame.h>\nint main(void){return lame_set_VBR_quality(0,0);}\n' > "$work/lametest.c"
+  CPATH="$stage/include" LIBRARY_PATH="$stage/lib" "$TRIPLE-clang" -static "$work/lametest.c" -o "$work/lametest.exe" -lmp3lame -lm \
+    || { "$TRIPLE-clang" -v -static "$work/lametest.c" -o "$work/lametest.exe" -L"$stage/lib" -I"$stage/include" -lmp3lame -lm >&2 || true
+         die "LAME 링크 시험 실패($TRIPLE)"; }
 
   log "ffmpeg $FFMPEG_VERSION ($TRIPLE)"
   tar -xJf "$src/ffmpeg-$FFMPEG_VERSION.tar.xz" -C "$work"
