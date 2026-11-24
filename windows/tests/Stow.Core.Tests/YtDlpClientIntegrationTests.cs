@@ -74,6 +74,24 @@ public class YtDlpClientIntegrationTests
         finally { empty.Delete(true); }
     }
 
+    [Fact]
+    public async Task MissingYtDlpFileIsReportedBeforeRunning()
+    {
+        // python.exe 등은 있고 yt-dlp만 없을 때도 "다시 설치" 안내가 나와야 한다(알 수 없는 오류가 아니라).
+        var dir = Directory.CreateTempSubdirectory("stow-partial-");
+        try
+        {
+            var engine = new EngineLocator(dir.FullName);
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "python"));
+            foreach (var path in new[] { engine.Python, engine.Deno, engine.Ffmpeg, engine.Ffprobe }) File.WriteAllText(path, "");
+            var error = await Assert.ThrowsAsync<EngineException>(() =>
+                new YtDlpClient(engine).FetchMediaAsync(new Uri("https://youtu.be/dQw4w9WgXcQ"), TestContext.Current.CancellationToken));
+            Assert.Equal(EngineErrorKind.MissingComponent, error.Kind);
+            Assert.Equal("yt-dlp", error.Detail);
+        }
+        finally { dir.Delete(true); }
+    }
+
     /// <summary>스테레오 16비트 44.1kHz 사인파 WAV.</summary>
     private static void WriteToneWav(string path, int seconds)
     {

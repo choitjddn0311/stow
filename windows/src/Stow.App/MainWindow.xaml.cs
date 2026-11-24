@@ -106,8 +106,9 @@ public sealed partial class MainWindow : Window
             var (target, title) = media switch
             {
                 FetchedMedia.OfVideo v => (url, v.Metadata.Title),
-                // 재생목록은 시험으로 첫 영상만 받는다.
-                FetchedMedia.OfPlaylist p => (p.Playlist.Entries[0].Url, p.Playlist.Entries[0].Title),
+                // 재생목록은 시험으로 받을 수 있는 첫 영상만 받는다(비공개·삭제된 영상은 건너뜀).
+                FetchedMedia.OfPlaylist p when p.Playlist.Entries.FirstOrDefault(x => !x.IsUnavailable) is { } first => (first.Url, first.Title),
+                FetchedMedia.OfPlaylist => throw new EngineException(EngineErrorKind.EmptyPlaylist),
                 _ => throw new InvalidOperationException(),
             };
             var dispatcher = DispatcherQueue;

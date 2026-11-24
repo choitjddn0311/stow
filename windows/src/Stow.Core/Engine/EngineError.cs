@@ -22,6 +22,8 @@ public enum EngineErrorKind
     DiskFull,
     PermissionDenied,
     OutputDirectoryMissing,
+    /// <summary>저장 경로가 Windows 경로 길이 한도를 넘는다.</summary>
+    PathTooLong,
     // 엔진
     MissingComponent,
     LaunchFailed,
@@ -60,6 +62,7 @@ public sealed class EngineException(EngineErrorKind kind, string? detail = null,
         EngineErrorKind.DiskFull => "저장 공간이 부족합니다.",
         EngineErrorKind.PermissionDenied => "저장 위치에 파일을 쓸 권한이 없습니다. 다른 폴더를 선택해 주세요.",
         EngineErrorKind.OutputDirectoryMissing => "저장 폴더를 찾을 수 없습니다. 폴더가 삭제되었거나 디스크가 분리되었는지 확인해 주세요.",
+        EngineErrorKind.PathTooLong => "저장 위치의 경로가 너무 깁니다. 더 짧은 경로의 폴더를 선택해 주세요.",
         EngineErrorKind.MissingComponent => $"추출 엔진 구성 요소({detail})를 찾을 수 없습니다. 앱을 다시 설치해 주세요.",
         EngineErrorKind.LaunchFailed => $"추출 엔진을 실행하지 못했습니다({Path.GetFileName(detail ?? "")}).",
         EngineErrorKind.ConversionFailed => "오디오 변환에 실패했습니다.",

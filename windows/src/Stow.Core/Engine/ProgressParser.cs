@@ -97,7 +97,8 @@ public static class ProgressParser
         var downloaded = Number(values[1]);
         var total = Number(values[2]) ?? Number(values[3]);
         var speed = Number(values[4]);
-        var eta = Number(values[5]) is { } e ? (int?)Math.Round(e) : null;
+        // 멈춘 연결에서는 남은 시간이 아주 크게 나올 수 있다. int 범위를 넘으면 모르는 것으로 본다.
+        var eta = Number(values[5]) is { } e && e >= 0 && e <= int.MaxValue ? (int?)Math.Round(e) : null;
 
         double? fraction = status == "finished" ? 1
             : downloaded is { } d && total is { } t && t > 0 ? Math.Clamp(d / t, 0, 1)

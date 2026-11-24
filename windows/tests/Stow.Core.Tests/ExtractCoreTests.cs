@@ -43,6 +43,13 @@ public class ProgressParserTests
         Assert.Equal(new ProgressEvent.OutputFile(@"C:\work\abc.mp3"), ProgressParser.Parse(@"[stow:file] C:\work\abc.mp3"));
     }
 
+    [Fact]
+    public void HugeEtaIsUnknown()
+    {
+        Assert.Equal(new ProgressEvent.Progress(new ExtractProgress.Downloading(0.5, 1, null)),
+            ProgressParser.Parse("[stow:download] downloading 50 100 NA 1 3000000000"));
+    }
+
     [Theory]
     [InlineData("[download]  42.0% of 3.00MiB")]
     [InlineData("[stow:download] downloading 1 2")]
@@ -193,6 +200,9 @@ public class FileNamingTests
     [InlineData("nul", "nul_")]
     [InlineData("com1.final", "com1_.final")]
     [InlineData("CONSOLE", "CONSOLE")]
+    [InlineData("COM¹", "COM¹_")]
+    [InlineData("conin$.txt", "conin$_.txt")]
+    [InlineData("LPT0", "LPT0_")]
     public void Sanitizes(string title, string expected)
     {
         Assert.Equal(expected, FileNaming.Sanitize(title));
@@ -240,6 +250,38 @@ public class MoveToDestinationTests
             Assert.EndsWith(".flac", result);
         }
         finally { dir.Delete(true); }
+    }
+
+    [Fact]
+    public void KoreanNameKeepsItsFullCharacterBudget()
+    {
+        var dir = Directory.CreateTempSubdirectory("stow-move-");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "src.tmp");
+            File.WriteAllText(source, "x");
+            var directoryLength = Path.GetFullPath(dir.FullName).TrimEnd(Path.DirectorySeparatorChar).Length;
+            var budget = 259 - directoryLength - 1 - " (1000).".Length - "mp3".Length;
+            var result = YtDlpClient.MoveToDestination(source, dir.FullName, new string('가', budget + 50), "mp3");
+            // 바이트가 아니라 문자 수로 잘라 한도를 꽉 채운다.
+            Assert.Equal(new string('가', budget), Path.GetFileNameWithoutExtension(result));
+        }
+        finally { dir.Delete(true); }
+    }
+
+    [Fact]
+    public void TooLongDirectoryIsPathTooLong()
+    {
+        // 폴더 경로 자체는 260자 안쪽(긴 경로 설정과 무관하게 만들 수 있게)이지만 파일 이름을 붙일 자리가 없다.
+        var deep = Path.Combine(Path.GetTempPath(), new string('d', 100), new string('e', 100));
+        Assert.SkipWhen(Path.GetFullPath(deep).Length > 250, "임시 폴더 경로가 너무 길어 이 시험을 만들 수 없음");
+        Directory.CreateDirectory(deep);
+        try
+        {
+            Assert.Equal(EngineErrorKind.PathTooLong,
+                Assert.Throws<EngineException>(() => YtDlpClient.MoveToDestination("x", deep, "a", "mp3")).Kind);
+        }
+        finally { Directory.Delete(Path.Combine(Path.GetTempPath(), new string('d', 100)), true); }
     }
 
     [Fact]

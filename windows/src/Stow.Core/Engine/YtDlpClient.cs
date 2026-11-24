@@ -42,8 +42,7 @@ public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = nu
         Action<ExtractProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(options.OutputDirectory)) throw new EngineException(EngineErrorKind.OutputDirectoryMissing);
-        var work = Path.Combine(WorkDirectoryRoot ?? Path.GetTempPath(), "stow-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(work);
+        var work = CreateWorkDirectory(options.OutputDirectory);
         try
         {
             string? output = null;
@@ -68,18 +67,44 @@ public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = nu
         }
     }
 
+    /// <summary>
+    /// 작업 폴더: 저장 위치와 같은 드라이브에 만든다(옮길 때 복사 없이 이름만 바뀌고, 큰 영상이 다른 드라이브의 공간을 쓰지 않게).
+    /// 임시 폴더가 같은 드라이브면 임시 폴더에, 아니면 저장 위치 안에 숨김 폴더로. 테스트는 <see cref="WorkDirectoryRoot"/>로 정한다.
+    /// </summary>
+    private string CreateWorkDirectory(string outputDirectory)
+    {
+        var name = "stow-" + Guid.NewGuid().ToString("N");
+        if (WorkDirectoryRoot is { } root) return Directory.CreateDirectory(Path.Combine(root, name)).FullName;
+        var temp = Path.GetTempPath();
+        if (string.Equals(Path.GetPathRoot(Path.GetFullPath(temp)), Path.GetPathRoot(Path.GetFullPath(outputDirectory)),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return Directory.CreateDirectory(Path.Combine(temp, name)).FullName;
+        }
+        try
+        {
+            var directory = Directory.CreateDirectory(Path.Combine(outputDirectory, "." + name));
+            directory.Attributes |= FileAttributes.Hidden;
+            return directory.FullName;
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            throw new EngineException(EngineErrorKind.PermissionDenied, error.Message, error);
+        }
+    }
+
     private async Task<ProcessResult> RunAsync(ProcessCommand command, Action<OutputLine>? onLine, CancellationToken cancellationToken)
     {
+        // 엔진 파일이 빠져 있으면 실행하기 전에 알린다(python.exe가 있어도 yt-dlp·ffmpeg가 없으면 알 수 없는 오류가 된다).
+        var missing = engine.MissingComponents();
+        if (missing.Count > 0) throw new EngineException(EngineErrorKind.MissingComponent, string.Join(", ", missing));
         try
         {
             return await runner.RunAsync(command, onLine, cancellationToken).ConfigureAwait(false);
         }
         catch (ProcessLaunchException error)
         {
-            var missing = engine.MissingComponents();
-            throw missing.Count > 0
-                ? new EngineException(EngineErrorKind.MissingComponent, string.Join(", ", missing), error)
-                : new EngineException(EngineErrorKind.LaunchFailed, error.Executable, error);
+            throw new EngineException(EngineErrorKind.LaunchFailed, error.Executable, error);
         }
     }
 
@@ -87,10 +112,10 @@ public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = nu
     internal static string MoveToDestination(string source, string directory, string baseName, string extension)
     {
         if (!Directory.Exists(directory)) throw new EngineException(EngineErrorKind.OutputDirectoryMissing);
-        // " (999)."과 확장자를 붙여도 한도를 넘지 않게 이름 길이를 맞춘다(문자 단위로 자른다).
-        var budget = MaxPathLength - Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar).Length - 1 - " (999).".Length - extension.Length;
-        if (budget < 1) throw new EngineException(EngineErrorKind.PermissionDenied, "저장 위치 경로가 너무 깁니다.");
-        if (baseName.Length > budget) baseName = FileNaming.TruncateToBytes(baseName, budget).TrimEnd('.', ' ');
+        // 가장 긴 번호 " (1000)."과 확장자를 붙여도 한도를 넘지 않게 이름 길이(UTF-16 문자 수)를 맞춘다.
+        var budget = MaxPathLength - Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar).Length - 1 - " (1000).".Length - extension.Length;
+        if (budget < 1) throw new EngineException(EngineErrorKind.PathTooLong);
+        if (baseName.Length > budget) baseName = FileNaming.TruncateToChars(baseName, budget).TrimEnd('.', ' ');
         if (baseName.Length == 0) baseName = FileNaming.Fallback;
 
         for (var index = 1; index <= 1000; index++)
@@ -103,24 +128,40 @@ public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = nu
                 File.Move(source, destination, overwrite: false);
                 return destination;
             }
-            catch (IOException) when (File.Exists(destination))
+            catch (IOException error) when (IsDiskFull(error))
             {
-                // 동시에 끝난 다른 작업이 먼저 같은 이름을 썼다. 다음 번호로.
+                // 다른 드라이브로 복사하다 공간이 모자라면 대상에 반쯤 쓴 파일이 남는다(바로 위에서 없음을 확인한 이름이다).
+                TryDelete(destination);
+                throw new EngineException(EngineErrorKind.DiskFull, error.Message, error);
             }
-            catch (UnauthorizedAccessException error)
+            catch (PathTooLongException error)
             {
-                throw new EngineException(EngineErrorKind.PermissionDenied, error.Message, error);
+                throw new EngineException(EngineErrorKind.PathTooLong, error.Message, error);
             }
             catch (DirectoryNotFoundException error)
             {
                 throw new EngineException(EngineErrorKind.OutputDirectoryMissing, error.Message, error);
             }
-            catch (IOException error) when (IsDiskFull(error))
+            catch (IOException) when (File.Exists(destination) && File.Exists(source))
             {
-                throw new EngineException(EngineErrorKind.DiskFull, error.Message, error);
+                // 동시에 끝난 다른 작업이 먼저 같은 이름을 썼다(원본은 그대로 있다). 다음 번호로.
+            }
+            catch (UnauthorizedAccessException error)
+            {
+                throw new EngineException(EngineErrorKind.PermissionDenied, error.Message, error);
+            }
+            catch (IOException error)
+            {
+                // 다른 프로그램(백신 등)이 파일을 쓰고 있음, 네트워크 드라이브 오류 등
+                throw new EngineException(EngineErrorKind.Unknown, error.Message, error);
             }
         }
         throw new EngineException(EngineErrorKind.Unknown, $"같은 이름의 파일이 너무 많습니다: {baseName}.{extension}");
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
     /// <summary>ERROR_DISK_FULL(112), ERROR_HANDLE_DISK_FULL(39), ENOSPC(28).</summary>

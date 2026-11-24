@@ -17,11 +17,12 @@ public static class FileNaming
 
     public const string Fallback = "오디오";
 
+    /// <summary>Windows 장치 이름(확장자가 붙어도 파일로 쓸 수 없다). 위 첨자 숫자 형태도 포함.</summary>
     private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$",
+        "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "COM¹", "COM²", "COM³",
+        "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²", "LPT³",
     };
 
     public static string Sanitize(string title)
@@ -57,16 +58,23 @@ public static class FileNaming
     }
 
     /// <summary>UTF-8로 <paramref name="maxBytes"/> 이하가 될 때까지 끝에서 문자(그래핌)를 하나씩 뺀다.</summary>
-    public static string TruncateToBytes(string text, int maxBytes)
+    public static string TruncateToBytes(string text, int maxBytes) =>
+        Truncate(text, maxBytes, Encoding.UTF8.GetByteCount);
+
+    /// <summary>UTF-16 길이(Windows 경로 길이 단위)로 <paramref name="maxChars"/> 이하가 될 때까지 끝에서 문자(그래핌)를 뺀다.</summary>
+    public static string TruncateToChars(string text, int maxChars) =>
+        Truncate(text, maxChars, s => s.Length);
+
+    private static string Truncate(string text, int limit, Func<string, int> measure)
     {
-        if (Encoding.UTF8.GetByteCount(text) <= maxBytes) return text;
+        if (measure(text) <= limit) return text;
         var elements = new List<string>();
         var enumerator = StringInfo.GetTextElementEnumerator(text);
         while (enumerator.MoveNext()) elements.Add((string)enumerator.Current);
-        var bytes = Encoding.UTF8.GetByteCount(text);
-        while (elements.Count > 0 && bytes > maxBytes)
+        var size = measure(text);
+        while (elements.Count > 0 && size > limit)
         {
-            bytes -= Encoding.UTF8.GetByteCount(elements[^1]);
+            size -= measure(elements[^1]);
             elements.RemoveAt(elements.Count - 1);
         }
         return string.Concat(elements);
