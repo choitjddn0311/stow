@@ -272,9 +272,12 @@ public class MoveToDestinationTests
     [Fact]
     public void TooLongDirectoryIsPathTooLong()
     {
-        // 폴더 경로 자체는 260자 안쪽(긴 경로 설정과 무관하게 만들 수 있게)이지만 파일 이름을 붙일 자리가 없다.
-        var deep = Path.Combine(Path.GetTempPath(), new string('d', 100), new string('e', 100));
-        Assert.SkipWhen(Path.GetFullPath(deep).Length > 250, "임시 폴더 경로가 너무 길어 이 시험을 만들 수 없음");
+        // 폴더 경로를 정확히 250자로 만든다: 260자 안쪽이라 긴 경로 설정과 무관하게 만들 수 있지만,
+        // 파일 이름(" (1000).mp3" 포함)을 붙일 자리가 없다. 임시 폴더 경로 길이는 OS마다 달라 남은 길이를 계산한다.
+        var parent = Path.GetFullPath(Path.Combine(Path.GetTempPath(), new string('d', 100)));
+        var remaining = 250 - parent.Length - 1;
+        Assert.SkipWhen(remaining < 1, "임시 폴더 경로가 너무 길어 이 시험을 만들 수 없음");
+        var deep = Path.Combine(parent, new string('e', remaining));
         Directory.CreateDirectory(deep);
         try
         {
