@@ -26,3 +26,5 @@ windows/**/bin/
 windows/**/obj/
 windows/out/
 .vs/
+windows/engine/
+windows/build/

@@ -25,4 +25,13 @@
   <ItemGroup>
     <ProjectReference Include="..\Stow.Core\Stow.Core.csproj" />
   </ItemGroup>
+
+  <!-- 엔진(Python·yt-dlp·deno·ffmpeg): scripts/fetch-engine.sh·build-ffmpeg.sh가 만든 engine/<RID>를 앱 폴더의 engine\로 복사한다.
+       Content가 아니라 None으로 넣어 화면 리소스(PRI) 색인에 들어가지 않게 한다. 폴더가 없으면 엔진 없이 빌드된다. -->
+  <PropertyGroup>
+    <StowEngineDir>$(MSBuildThisFileDirectory)..\..\engine\$(RuntimeIdentifier)\</StowEngineDir>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' != '' And Exists('$(StowEngineDir)')">
+    <None Include="$(StowEngineDir)**\*" LinkBase="engine" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

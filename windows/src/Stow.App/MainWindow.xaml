@@ -6,12 +6,22 @@
     Title="Stow">
     <!-- 배경: Mica를 쓸 수 있으면(Windows 11) Mica, 아니면(Windows 10) 기본 단색. 코드에서 정한다. -->
     <Grid x:Name="RootGrid">
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="520">
             <TextBlock Text="Stow" Style="{StaticResource TitleTextBlockStyle}" HorizontalAlignment="Center" />
             <TextBlock x:Name="VersionText"
                        Style="{StaticResource BodyTextBlockStyle}"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                        HorizontalAlignment="Center" />
+            <!-- 개발 확인용: 앱에 넣은 엔진이 이 PC에서 실행되는지 보여 준다. -->
+            <TextBlock Text="엔진 확인" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,24,0,0" />
+            <ProgressRing x:Name="EngineProgress" IsActive="True" HorizontalAlignment="Left" Width="20" Height="20" />
+            <ItemsControl x:Name="EngineResults">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" IsTextSelectionEnabled="True" Margin="0,2" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
     </Grid>
 </Window>
