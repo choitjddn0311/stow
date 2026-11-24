@@ -61,7 +61,7 @@ build() {
     "$LAME_SHA256" "$src/lame-$LAME_VERSION.tar.gz"
   download_verified "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" \
     "$FFMPEG_SHA256" "$src/ffmpeg-$FFMPEG_VERSION.tar.xz"
-  download_verified "https://zlib.net/fossils/zlib-$ZLIB_VERSION.tar.gz" \
+  download_verified "https://github.com/madler/zlib/releases/download/v$ZLIB_VERSION/zlib-$ZLIB_VERSION.tar.gz" \
     "$ZLIB_SHA256" "$src/zlib-$ZLIB_VERSION.tar.gz"
 
   work=$(mktemp -d "$WIN_CACHE/ffmpeg-build.XXXXXX")
