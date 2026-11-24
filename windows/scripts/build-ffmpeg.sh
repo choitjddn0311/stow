@@ -99,16 +99,17 @@ build() {
 
   check_lib "$stage/lib/libmp3lame.a"
   check_lib "$stage/lib/libz.a"
-  # ffmpeg configure와 같은 방식(CPATH·LIBRARY_PATH)으로 LAME을 링크해 본다.
-  printf '#include <lame/lame.h>\nint main(void){return lame_set_VBR_quality(0,0);}\n' > "$work/lametest.c"
-  CPATH="$stage/include" LIBRARY_PATH="$stage/lib" "$TRIPLE-clang" -static "$work/lametest.c" -o "$work/lametest.exe" -lmp3lame -lm \
-    || { "$TRIPLE-clang" -v -static "$work/lametest.c" -o "$work/lametest.exe" -L"$stage/lib" -I"$stage/include" -lmp3lame -lm >&2 || true
-         die "LAME 링크 시험 실패($TRIPLE)"; }
+  # LAME·zlib을 툴체인의 대상별 기본 경로(<툴체인>/<트리플>/lib·include)에 넣는다. 컴파일러가 항상 찾는 곳이라
+  # configure에 경로를 넘기지 않아도 된다(넘기면 -buildconf로 실행 파일에 빌드 경로가 남는다).
+  # 환경 변수(LIBRARY_PATH)는 Linux 툴체인의 ARM64 대상에서 적용되지 않았다.
+  local sysroot="$bin/../$TRIPLE"
+  cp "$stage/lib/libmp3lame.a" "$stage/lib/libz.a" "$sysroot/lib/"
+  mkdir -p "$sysroot/include/lame"
+  cp "$stage/include/lame/lame.h" "$sysroot/include/lame/"
+  cp "$stage/include/zlib.h" "$stage/include/zconf.h" "$sysroot/include/"
 
   log "ffmpeg $FFMPEG_VERSION ($TRIPLE)"
   tar -xJf "$src/ffmpeg-$FFMPEG_VERSION.tar.xz" -C "$work"
-  # 라이브러리 경로는 configure 인자 대신 clang 환경 변수(CPATH, LIBRARY_PATH)로 넘긴다
-  # (configure 인자는 -buildconf로 실행 파일에 그대로 남으므로 빌드 경로가 들어가지 않게 한다).
   local config=(
     --target-os=mingw32 --arch="$ARCH" --enable-cross-compile
     --cross-prefix="$TRIPLE-" --cc="$TRIPLE-clang"
@@ -132,13 +133,13 @@ build() {
   )
   (
     cd "$work/ffmpeg-$FFMPEG_VERSION"
-    CPATH="$stage/include" LIBRARY_PATH="$stage/lib" ./configure "${config[@]}" >/dev/null \
+    ./configure "${config[@]}" >/dev/null \
       || { tail -30 ffbuild/config.log >&2; die "ffmpeg configure 실패"; }
     # GPL·nonfree·version3가 꺼져 있어야 한다.
     for flag in GPL NONFREE VERSION3; do
       grep -q "^#define CONFIG_$flag 0" config.h || die "ffmpeg 구성에 ${flag}가 켜져 있습니다."
     done
-    CPATH="$stage/include" LIBRARY_PATH="$stage/lib" make -j"$JOBS" >/dev/null
+    make -j"$JOBS" >/dev/null
     rm -rf "$PREFIX"
     mkdir -p "$PREFIX/licenses"
     # ffmpeg.exe·ffprobe.exe는 심볼을 뺀 실행 파일이다(_g가 붙은 파일은 디버그용).
