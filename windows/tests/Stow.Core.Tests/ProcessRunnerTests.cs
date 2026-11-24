@@ -33,11 +33,28 @@ public class ProcessRunnerTests
     {
         // 공백·따옴표·셸 특수 문자가 든 인자가 한 덩어리로 그대로 전달된다.
         const string tricky = "a b \"c\" $HOME & | ; 한글";
-        var command = OperatingSystem.IsWindows()
-            ? new ProcessCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "[Console]::Out.WriteLine($args[0])", tricky])
-            : new ProcessCommand("/bin/sh", ["-c", "printf '%s\\n' \"$1\"", "sh", tricky]);
-        var result = await new ProcessRunner().RunAsync(command, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Equal([tricky], result.Stdout);
+        string? script = null;
+        try
+        {
+            ProcessCommand command;
+            if (OperatingSystem.IsWindows())
+            {
+                // -Command 뒤의 인자는 $args로 오지 않으므로 스크립트 파일(-File)로 받는다. 한글이 깨지지 않게 UTF-8로 출력한다.
+                script = Path.Combine(Path.GetTempPath(), $"stow-echo-{Guid.NewGuid()}.ps1");
+                File.WriteAllText(script, "[Console]::OutputEncoding = [Text.Encoding]::UTF8\n[Console]::Out.WriteLine($args[0])\n");
+                command = new ProcessCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, tricky]);
+            }
+            else
+            {
+                command = new ProcessCommand("/bin/sh", ["-c", "printf '%s\\n' \"$1\"", "sh", tricky]);
+            }
+            var result = await new ProcessRunner().RunAsync(command, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Equal([tricky], result.Stdout);
+        }
+        finally
+        {
+            if (script is not null) File.Delete(script);
+        }
     }
 
     [Fact]
