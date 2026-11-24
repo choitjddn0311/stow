@@ -83,6 +83,7 @@ build() {
     make -j"$JOBS" >/dev/null
     make install >/dev/null
   )
+  log "준비된 라이브러리: $(cd "$stage" && find . -name '*.a' | tr '\n' ' ')"
 
   log "ffmpeg $FFMPEG_VERSION ($TRIPLE)"
   tar -xJf "$src/ffmpeg-$FFMPEG_VERSION.tar.xz" -C "$work"
