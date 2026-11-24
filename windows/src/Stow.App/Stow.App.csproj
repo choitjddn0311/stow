@@ -34,4 +34,9 @@
   <ItemGroup Condition="'$(RuntimeIdentifier)' != '' And Exists('$(StowEngineDir)')">
     <None Include="$(StowEngineDir)**\*" LinkBase="engine" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- 배포용(Release) publish에 엔진이 없으면 멈춘다(엔진 없는 앱이 조용히 만들어지지 않게). -->
+  <Target Name="StowRequireEngine" BeforeTargets="PrepareForPublish"
+          Condition="'$(Configuration)' == 'Release' And !Exists('$(StowEngineDir)ffmpeg.exe')">
+    <Error Text="엔진이 없습니다: $(StowEngineDir). 먼저 windows/scripts/fetch-engine.sh와 build-ffmpeg.sh를 실행하세요." />
+  </Target>
 </Project>

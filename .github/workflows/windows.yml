@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - windows/**
+      - scripts/build-ffmpeg.sh   # Mac ffmpeg 구성과 같은지 확인한다
       - .github/workflows/windows.yml
   workflow_dispatch:
 
@@ -47,6 +48,9 @@ jobs:
 
       - name: Fetch Python, yt-dlp, deno
         run: PYC_PYTHON=python3.13 scripts/fetch-engine.sh ${{ matrix.rid }}
+
+      - name: Check ffmpeg config matches Mac
+        run: scripts/check-ffmpeg-parity.sh
 
       - name: Build ffmpeg (LGPL)
         run: scripts/build-ffmpeg.sh ${{ matrix.rid }}

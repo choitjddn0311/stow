@@ -34,6 +34,9 @@ internal sealed partial class JobObject : IDisposable
         return new JobObject(handle);
     }
 
+    /// <summary>Job에 든 모든 프로세스를 끝낸다(취소). 실패하면 false.</summary>
+    public bool Terminate() => TerminateJobObject(handle, 1);
+
     public void Dispose() => CloseHandle(handle);
 
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
@@ -81,6 +84,10 @@ internal sealed partial class JobObject : IDisposable
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool TerminateJobObject(IntPtr job, uint exitCode);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

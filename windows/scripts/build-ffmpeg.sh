@@ -65,6 +65,8 @@ build() {
     "$ZLIB_SHA256" "$src/zlib-$ZLIB_VERSION.tar.gz"
 
   work=$(mktemp -d "$WIN_CACHE/ffmpeg-build.XXXXXX")
+  # 실패·중단해도 작업 폴더가 캐시에 남지 않게 한다.
+  trap 'rm -rf "$work"' EXIT
   stage="$work/stage"
   mkdir -p "$stage/include" "$stage/lib"
 
@@ -140,16 +142,20 @@ build() {
       grep -q "^#define CONFIG_$flag 0" config.h || die "ffmpeg 구성에 ${flag}가 켜져 있습니다."
     done
     make -j"$JOBS" >/dev/null
-    rm -rf "$PREFIX"
-    mkdir -p "$PREFIX/licenses"
+    # 결과를 작업 폴더에 다 모은 뒤 한 번에 캐시 위치로 옮긴다(중간에 실패하면 캐시가 생기지 않는다).
+    local out="$work/out"
+    mkdir -p "$out/licenses"
     # ffmpeg.exe·ffprobe.exe는 심볼을 뺀 실행 파일이다(_g가 붙은 파일은 디버그용).
-    cp ffmpeg.exe ffprobe.exe "$PREFIX/"
-    cp COPYING.LGPLv2.1 "$PREFIX/licenses/ffmpeg-COPYING.LGPLv2.1.txt"
-    cp LICENSE.md "$PREFIX/licenses/ffmpeg-LICENSE.md"
-    cp "$work/lame-$LAME_VERSION/COPYING" "$PREFIX/licenses/lame-COPYING.txt"
-    cp "$work/zlib-$ZLIB_VERSION/LICENSE" "$PREFIX/licenses/zlib-LICENSE.txt"
+    cp ffmpeg.exe ffprobe.exe "$out/"
+    cp COPYING.LGPLv2.1 "$out/licenses/ffmpeg-COPYING.LGPLv2.1.txt"
+    cp LICENSE.md "$out/licenses/ffmpeg-LICENSE.md"
+    cp "$work/lame-$LAME_VERSION/COPYING" "$out/licenses/lame-COPYING.txt"
+    cp "$work/zlib-$ZLIB_VERSION/LICENSE" "$out/licenses/zlib-LICENSE.txt"
+    rm -rf "$PREFIX"
+    mv "$out" "$PREFIX"
   )
   rm -rf "$work"
+  trap - EXIT
 }
 
 verify() {
@@ -167,7 +173,7 @@ verify() {
   esac
 }
 
-if [[ -f $PREFIX/ffmpeg.exe && -f $PREFIX/ffprobe.exe ]]; then
+if [[ -f $PREFIX/ffmpeg.exe && -f $PREFIX/ffprobe.exe && -f $PREFIX/licenses/zlib-LICENSE.txt ]]; then
   log "ffmpeg $FFMPEG_VERSION ($RID): 캐시된 빌드 사용"
 else
   build

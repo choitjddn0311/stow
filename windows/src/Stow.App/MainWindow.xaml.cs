@@ -34,19 +34,34 @@ public sealed partial class MainWindow : Window
     /// <summary>엔진 구성 요소를 하나씩 실행해 버전과 걸린 시간을 보여 준다.</summary>
     private async Task CheckEngineAsync()
     {
+        try
+        {
+            await ShowEngineCheckAsync();
+        }
+        catch (Exception error)
+        {
+            // 실행 중 예상하지 못한 문제(파이프 오류 등)도 화면에 보여 준다.
+            EngineResults.ItemsSource = new[] { $"✕ 엔진을 확인하지 못했습니다: {error.Message}" };
+        }
+        finally
+        {
+            EngineProgress.IsActive = false;
+        }
+    }
+
+    private async Task ShowEngineCheckAsync()
+    {
         var engine = EngineLocator.Bundled();
         var missing = engine.MissingComponents();
         if (missing.Count > 0)
         {
             EngineResults.ItemsSource = new[] { $"✕ 엔진 파일이 없습니다: {string.Join(", ", missing)}", $"위치: {engine.Directory}" };
-            EngineProgress.IsActive = false;
             return;
         }
         var results = await EngineCheck.RunAsync(engine, new ProcessRunner());
         EngineResults.ItemsSource = results
             .Select(r => $"{(r.IsOk ? "✓" : "✕")} {r.Name} · {r.Elapsed.TotalSeconds:0.0}초 · {r.Detail}")
             .ToList();
-        EngineProgress.IsActive = false;
     }
 
     /// <summary>Windows 11은 Mica, Mica를 쓸 수 없는 Windows 10은 테마에 맞는 단색 배경.</summary>

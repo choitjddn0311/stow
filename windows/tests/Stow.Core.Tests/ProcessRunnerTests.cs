@@ -67,6 +67,43 @@ public class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task CallbacksNeverOverlapAcrossStreams()
+    {
+        var active = 0;
+        var overlapped = false;
+        var count = 0;
+        await new ProcessRunner().RunAsync(
+            Script(
+                "i=0; while [ $i -lt 300 ]; do echo out$i; echo err$i >&2; i=$((i+1)); done",
+                "for ($i = 0; $i -lt 300; $i++) { [Console]::Out.WriteLine(\"out$i\"); [Console]::Error.WriteLine(\"err$i\") }"),
+            _ =>
+            {
+                if (Interlocked.Increment(ref active) > 1) overlapped = true;
+                Thread.SpinWait(200);
+                count++;
+                Interlocked.Decrement(ref active);
+            },
+            TestContext.Current.CancellationToken);
+        Assert.False(overlapped, "onLine이 동시에 호출됨");
+        Assert.Equal(600, count);
+    }
+
+    [Fact]
+    public async Task KeepsOnlyTheLastLinesInResult()
+    {
+        var total = ProcessRunner.MaxKeptLines + 100;
+        var seen = 0;
+        var result = await new ProcessRunner().RunAsync(
+            Script($"i=0; while [ $i -lt {total} ]; do echo $i; i=$((i+1)); done",
+                   $"for ($i = 0; $i -lt {total}; $i++) {{ [Console]::Out.WriteLine($i) }}"),
+            _ => seen++,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(total, seen);  // 줄 단위 전달은 모두
+        Assert.Equal(ProcessRunner.MaxKeptLines, result.Stdout.Count);  // 결과에는 마지막 줄들만
+        Assert.Equal((total - 1).ToString(), result.Stdout[^1]);
+    }
+
+    [Fact]
     public async Task MissingExecutableThrowsLaunchError()
     {
         var command = new ProcessCommand(Path.Combine(Path.GetTempPath(), "no-such-program-" + Guid.NewGuid()), []);
