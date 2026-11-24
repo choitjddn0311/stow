@@ -51,7 +51,10 @@ jobs:
         run: |
           dotnet publish src/Stow.App/Stow.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} --self-contained -o out/${{ matrix.rid }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path "out/${{ matrix.rid }}/Stow.exe")) { Write-Error "out/${{ matrix.rid }}/Stow.exe 없음"; exit 1 }
+          # 실행 파일과 화면 리소스(resources.pri)가 있어야 앱이 뜬다.
+          foreach ($file in @('Stow.exe', 'resources.pri')) {
+            if (-not (Test-Path "out/${{ matrix.rid }}/$file")) { Write-Error "out/${{ matrix.rid }}/$file 없음"; exit 1 }
+          }
 
       - uses: actions/upload-artifact@v4
         with:
