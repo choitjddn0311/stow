@@ -14,7 +14,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
-    <!-- 설치 패키지가 없어도 화면 리소스 파일(resources.pri, 컴파일된 XAML 포함)을 만들게 한다.
+    <!-- 설치 패키지가 없어도 화면 리소스 파일(Stow.pri, 컴파일된 XAML 포함)을 만들게 한다.
          없으면 첫 창을 불러오다 실패해 앱이 아무것도 띄우지 못하고 꺼진다. -->
     <EnableMsixTooling>true</EnableMsixTooling>
   </PropertyGroup>
