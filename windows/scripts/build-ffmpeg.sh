@@ -77,13 +77,14 @@ build() {
     done
     # 3.100의 심볼 목록에 실제로 없는 lame_init_old가 있다(Mac 빌드와 같은 처리).
     sed -i '/^lame_init_old$/d' include/libmp3lame.sym
-    CC="$TRIPLE-clang" CFLAGS="-O2 -w" ./configure --prefix="$stage" --host="$TRIPLE" \
+    # AR·RANLIB도 툴체인 것을 쓴다(시스템 ar은 ARM64 Windows 오브젝트의 색인을 못 만들어 링커가 라이브러리를 무시한다).
+    CC="$TRIPLE-clang" AR="$TRIPLE-ar" RANLIB="$TRIPLE-ranlib" CFLAGS="-O2 -w" \
+      ./configure --prefix="$stage" --host="$TRIPLE" \
       --disable-shared --enable-static --disable-frontend --disable-decoder \
       --disable-dependency-tracking >/dev/null
     make -j"$JOBS" >/dev/null
     make install >/dev/null
   )
-  log "준비된 라이브러리: $(cd "$stage" && find . -name '*.a' | tr '\n' ' ')"
 
   log "ffmpeg $FFMPEG_VERSION ($TRIPLE)"
   tar -xJf "$src/ffmpeg-$FFMPEG_VERSION.tar.xz" -C "$work"
