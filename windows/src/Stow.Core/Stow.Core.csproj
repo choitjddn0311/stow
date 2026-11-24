@@ -3,5 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Stow.Core</RootNamespace>
+    <!-- Windows Job Object 호출(LibraryImport가 만드는 마샬링 코드에 필요) -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 </Project>

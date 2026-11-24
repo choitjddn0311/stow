@@ -1,12 +1,14 @@
 name: Windows
 
-# Windows 버전(windows/)이 바뀐 PR에서만 실행한다. 공통 로직 테스트 → x64·ARM64 앱 빌드 → 실행 파일을 아티팩트로 올린다
-# (Windows PC에서 받아 실행해 보는 용도).
+# Windows 버전(windows/)이 바뀐 PR에서만 실행한다.
+# 1) engine(Linux): Python·yt-dlp·deno를 받고 ffmpeg를 LGPL로 교차 빌드 → 아키텍처별 엔진 아티팩트
+# 2) windows-build(Windows): 공통 로직 테스트, 엔진 실행 확인(x64), 엔진을 넣어 앱 publish → 실행 파일 아티팩트
 on:
   pull_request:
     branches: [main]
     paths:
       - windows/**
+      - scripts/build-ffmpeg.sh   # Mac ffmpeg 구성과 같은지 확인한다
       - .github/workflows/windows.yml
   workflow_dispatch:
 
@@ -18,7 +20,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64]
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      # 표준 라이브러리 미리 컴파일용(같은 3.13이면 .pyc는 OS·아키텍처와 무관)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install build tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq nasm make xz-utils unzip >/dev/null
+
+      - uses: actions/cache@v4
+        with:
+          path: windows/build/cache
+          key: win-engine-${{ matrix.rid }}-${{ hashFiles('windows/scripts/*.sh') }}
+
+      - name: Fetch Python, yt-dlp, deno
+        run: PYC_PYTHON=python3.13 scripts/fetch-engine.sh ${{ matrix.rid }}
+
+      - name: Check ffmpeg config matches Mac
+        run: scripts/check-ffmpeg-parity.sh
+
+      - name: Build ffmpeg (LGPL)
+        run: scripts/build-ffmpeg.sh ${{ matrix.rid }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ matrix.rid }}
+          path: windows/engine/${{ matrix.rid }}
+          retention-days: 7
+
   windows-build:
+    needs: engine
     runs-on: windows-2025
     timeout-minutes: 30
     strategy:
@@ -42,17 +86,41 @@ jobs:
         with:
           global-json-file: windows/global.json
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine-${{ matrix.rid }}
+          path: windows/engine/${{ matrix.rid }}
+
       # 공통 로직 테스트는 플랫폼과 무관하므로 x64에서 한 번만 돌린다.
       - name: Test core
         if: matrix.rid == 'win-x64'
         run: dotnet test --project tests/Stow.Core.Tests -c Release
 
+      # 러너가 x64라 ARM64 엔진은 실행해 볼 수 없다(ARM64는 빌드 때 실행 파일 형식·의존 DLL을 확인한다).
+      - name: Check engine runs (x64)
+        if: matrix.rid == 'win-x64'
+        run: |
+          $engine = "engine/win-x64"
+          $conf = & "$engine/ffmpeg.exe" -hide_banner -buildconf
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ($conf -match '--enable-(gpl|nonfree|version3)') { Write-Error "ffmpeg 구성에 GPL/nonfree/version3"; exit 1 }
+          $license = & "$engine/ffmpeg.exe" -hide_banner -L
+          if (-not ($license -match 'GNU Lesser General Public')) { Write-Error "ffmpeg가 LGPL이 아님"; exit 1 }
+          & "$engine/ffprobe.exe" -hide_banner -version | Select-Object -First 1
+          $env:PYTHONUTF8 = '1'
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          & "$engine/python/python.exe" -I -B "$engine/yt-dlp" --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Host "yt-dlp 시작 시간: $($sw.Elapsed.TotalSeconds)초"
+          & "$engine/deno.exe" --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Publish app (${{ matrix.rid }})
         run: |
           dotnet publish src/Stow.App/Stow.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} --self-contained -o out/${{ matrix.rid }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # 실행 파일과 화면 리소스(Stow.pri, 컴파일된 XAML 포함)가 있어야 앱이 뜬다.
-          foreach ($file in @('Stow.exe', 'Stow.pri')) {
+          # 실행 파일, 화면 리소스(Stow.pri, 컴파일된 XAML 포함), 엔진이 있어야 앱이 동작한다.
+          foreach ($file in @('Stow.exe', 'Stow.pri', 'engine/python/python.exe', 'engine/yt-dlp', 'engine/deno.exe', 'engine/ffmpeg.exe', 'engine/ffprobe.exe')) {
             if (-not (Test-Path "out/${{ matrix.rid }}/$file")) { Write-Error "out/${{ matrix.rid }}/$file 없음"; exit 1 }
           }
 
