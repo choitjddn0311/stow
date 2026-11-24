@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Stow.App/Stow.App.csproj" />
+    <Project Path="src/Stow.Core/Stow.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stow.Core.Tests/Stow.Core.Tests.csproj" />
+  </Folder>
+</Solution>

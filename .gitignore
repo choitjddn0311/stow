@@ -20,3 +20,9 @@ docs/development/
 
 # 앱 번들용 실행 파일 (scripts/로 받거나 빌드, 저장소에 포함하지 않음)
 /engine/
+
+# Windows 버전(.NET) 빌드 결과
+windows/**/bin/
+windows/**/obj/
+windows/out/
+.vs/

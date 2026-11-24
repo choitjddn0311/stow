@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 화면과 무관한 로직. Windows가 아닌 곳(Mac·Linux)에서도 빌드·테스트한다. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Stow.Core</RootNamespace>
+  </PropertyGroup>
+</Project>
