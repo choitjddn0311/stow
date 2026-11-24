@@ -6,4 +6,7 @@
     <!-- Windows Job Object 호출(LibraryImport가 만드는 마샬링 코드에 필요) -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Stow.Core.Tests" />
+  </ItemGroup>
 </Project>

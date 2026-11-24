@@ -92,9 +92,12 @@ jobs:
           path: windows/engine/${{ matrix.rid }}
 
       # 공통 로직 테스트는 플랫폼과 무관하므로 x64에서 한 번만 돌린다.
+      # STOW_ENGINE_DIR: 실제 엔진으로 추출 흐름 전체를 확인하는 테스트를 켠다(로컬 WAV → MP3·WAV·FLAC).
       - name: Test core
         if: matrix.rid == 'win-x64'
-        run: dotnet test --project tests/Stow.Core.Tests -c Release
+        run: |
+          $env:STOW_ENGINE_DIR = (Resolve-Path engine/win-x64).Path
+          dotnet test --project tests/Stow.Core.Tests -c Release
 
       # 러너가 x64라 ARM64 엔진은 실행해 볼 수 없다(ARM64는 빌드 때 실행 파일 형식·의존 DLL을 확인한다).
       - name: Check engine runs (x64)
