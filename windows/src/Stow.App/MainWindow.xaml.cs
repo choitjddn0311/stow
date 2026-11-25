@@ -1,172 +1,245 @@
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Stow.Core;
 using Stow.Core.Engine;
+using Stow.Core.Features;
 using Stow.Core.Models;
+using Stow.Core.Settings;
 using Windows.Graphics;
+using Windows.System;
 
 namespace Stow;
 
 public sealed partial class MainWindow : Window
 {
-    /// <summary>처음 열 때의 창 크기(배율 100% 기준). Mac 메인 창과 비슷하다.</summary>
-    private const int InitialWidth = 640;
-    private const int InitialHeight = 800;
+    /// <summary>처음 열 때의 창 크기(배율 100% 기준). 두 칸이 보이는 너비.</summary>
+    private const int InitialWidth = 1040;
+    private const int InitialHeight = 760;
+
+    private readonly WindowsNotifier notifier = new();
+    private readonly EngineLocator engine = EngineLocator.Bundled();
+    /// <summary>코드에서 컨트롤 값을 맞추는 동안 바뀜 이벤트를 무시한다.</summary>
+    private bool updatingControls;
+
+    public ExtractViewModel ViewModel { get; }
 
     public MainWindow()
     {
+        var dataDirectory = AppInfo.DataDirectory(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        var settings = new AppSettings(new JsonFileSettingsStore(Path.Combine(dataDirectory, "settings.json")));
+        var client = new YtDlpClient(engine);
+        ViewModel = new ExtractViewModel(settings, client, new ExtractQueue(client, notifier));
+
         InitializeComponent();
         ApplyBackdrop();
-
-        var informational = typeof(MainWindow).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
-        VersionText.Text = $"Windows 버전 {AppInfo.DisplayVersion(informational)} · 준비 중";
-
-        // AppWindow.Resize는 실제 픽셀 단위라 화면 배율(예: 150%)을 곱해야 같은 크기로 보인다.
         var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)Math.Round(InitialWidth * scale), (int)Math.Round(InitialHeight * scale)));
 
-        _ = CheckEngineAsync();
+        var missing = engine.MissingComponents();
+        EngineInfoBar.IsOpen = missing.Count > 0;
+        EngineInfoBar.Message = $"앱을 다시 설치해 주세요. 없는 구성 요소: {string.Join(", ", missing)}";
+
+        settings.PropertyChanged += (_, _) => UpdateOutputControls();
+        UpdateOutputControls();
+        RootGrid.Loaded += OnLoaded;
+        Closed += OnClosed;
     }
 
-    /// <summary>엔진 구성 요소를 하나씩 실행해 버전과 걸린 시간을 보여 준다.</summary>
-    private async Task CheckEngineAsync()
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        RootGrid.Loaded -= OnLoaded;
+        if (ViewModel.Settings.AcceptedNoticeVersion < UsageNotice.Version && !await ShowUsageNoticeAsync())
+        {
+            Application.Current.Exit();
+            return;
+        }
+        UrlBox.Focus(FocusState.Programmatic);
+    }
+
+    private void OnClosed(object sender, WindowEventArgs args)
+    {
+        // 진행 중인 추출을 끝낸다(엔진 프로세스는 Job Object로 함께 끝난다).
+        ViewModel.Queue.CancelAll();
+        WindowsNotifier.Unregister();
+    }
+
+    /// <summary>첫 실행 이용 고지. 동의하면 true, "종료"면 false.</summary>
+    private async Task<bool> ShowUsageNoticeAsync()
+    {
+        var body = new StackPanel { Spacing = 12, MaxWidth = 420 };
+        for (var i = 0; i < UsageNotice.Paragraphs.Count; i++)
+        {
+            var text = new TextBlock { Text = UsageNotice.Paragraphs[i], TextWrapping = TextWrapping.Wrap };
+            if (i > 0) text.Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+            body.Children.Add(text);
+        }
+        var dialog = new ContentDialog
+        {
+            XamlRoot = RootGrid.XamlRoot,
+            Title = UsageNotice.Title,
+            Content = body,
+            PrimaryButtonText = UsageNotice.AcceptButton,
+            CloseButtonText = UsageNotice.QuitButton,
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;
+        ViewModel.Settings.AcceptedNoticeVersion = UsageNotice.Version;
+        return true;
+    }
+
+    // MARK: 출력 설정 컨트롤
+
+    /// <summary>설정에 맞춰 종류·포맷·음질(해상도) 컨트롤과 설명을 맞춘다.</summary>
+    private void UpdateOutputControls()
+    {
+        updatingControls = true;
         try
         {
-            await ShowEngineCheckAsync();
-        }
-        catch (Exception error)
-        {
-            // 실행 중 예상하지 못한 문제(파이프 오류 등)도 화면에 보여 준다.
-            EngineResults.ItemsSource = new[] { $"✕ 엔진을 확인하지 못했습니다: {error.Message}" };
+            var settings = ViewModel.Settings;
+            var video = settings.MediaKind == MediaKind.Video;
+            AudioKindButton.IsChecked = !video;
+            VideoKindButton.IsChecked = video;
+            KindIcon.Glyph = video ? "" : "";
+
+            FormatButtons.Children.Clear();
+            var options = video
+                ? new[] { ("MP4", "mp4"), ("최고 화질", "best") }
+                : new[] { ("MP3", "mp3"), ("WAV", "wav"), ("FLAC", "flac") };
+            var current = video
+                ? (settings.VideoFormat == VideoFormat.Mp4 ? "mp4" : "best")
+                : settings.AudioFormatKind switch { AudioFormatKind.Wav => "wav", AudioFormatKind.Flac => "flac", _ => "mp3" };
+            foreach (var (label, tag) in options)
+            {
+                var button = new ToggleButton { Content = label, Tag = tag, IsChecked = tag == current };
+                button.Click += OnFormatClick;
+                FormatButtons.Children.Add(button);
+            }
+
+            QualityBox.Items.Clear();
+            if (video)
+            {
+                QualityLabel.Text = "해상도";
+                QualityIcon.Glyph = "";
+                QualityDescription.Text = "고른 해상도가 없으면 그보다 낮은 것 중 가장 높은 해상도";
+                QualityBox.Visibility = Visibility.Visible;
+                foreach (var resolution in settings.VideoFormat.Resolutions())
+                {
+                    QualityBox.Items.Add(new ComboBoxItem { Content = DisplayText.Name(resolution), Tag = resolution });
+                }
+                QualityBox.SelectedIndex = settings.VideoFormat.Resolutions().ToList().IndexOf(settings.VideoResolution);
+            }
+            else if (settings.AudioFormatKind == AudioFormatKind.Mp3)
+            {
+                QualityLabel.Text = "음질";
+                QualityIcon.Glyph = "";
+                QualityDescription.Text = "";
+                QualityBox.Visibility = Visibility.Visible;
+                foreach (var bitrate in new[] { Mp3Bitrate.Kbps320, Mp3Bitrate.Kbps192, Mp3Bitrate.Kbps128 })
+                {
+                    QualityBox.Items.Add(new ComboBoxItem { Content = $"{(int)bitrate} kbps", Tag = bitrate });
+                }
+                QualityBox.SelectedIndex = settings.Mp3Bitrate switch { Mp3Bitrate.Kbps192 => 1, Mp3Bitrate.Kbps128 => 2, _ => 0 };
+            }
+            else
+            {
+                QualityLabel.Text = "음질";
+                QualityIcon.Glyph = "";
+                QualityDescription.Text = "무손실(원본 샘플레이트 유지)";
+                QualityBox.Visibility = Visibility.Collapsed;
+            }
+
+            FormatNote.Text = DisplayText.FormatNote(settings.Format)
+                + (video ? " 대기열에 넣는 순간의 포맷·저장 위치로 받습니다." : " 대기열에 넣는 순간의 포맷·저장 위치로 추출합니다.");
         }
         finally
         {
-            EngineProgress.IsActive = false;
+            updatingControls = false;
         }
     }
 
-    private async Task ShowEngineCheckAsync()
+    private void OnKindClick(object sender, RoutedEventArgs e)
     {
-        var engine = EngineLocator.Bundled();
-        var missing = engine.MissingComponents();
-        if (missing.Count > 0)
-        {
-            EngineResults.ItemsSource = new[] { $"✕ 엔진 파일이 없습니다: {string.Join(", ", missing)}", $"위치: {engine.Directory}" };
-            return;
-        }
-        var results = await EngineCheck.RunAsync(engine, new ProcessRunner());
-        EngineResults.ItemsSource = results
-            .Select(r => $"{(r.IsOk ? "✓" : "✕")} {r.Name} · {r.Elapsed.TotalSeconds:0.0}초 · {r.Detail}")
-            .ToList();
+        ViewModel.Settings.MediaKind = (string)((FrameworkElement)sender).Tag == "video" ? MediaKind.Video : MediaKind.Audio;
+        UpdateOutputControls();  // 같은 값을 다시 눌러도 버튼 상태를 되돌린다
     }
+
+    private void OnFormatClick(object sender, RoutedEventArgs e)
+    {
+        var settings = ViewModel.Settings;
+        switch ((string)((FrameworkElement)sender).Tag)
+        {
+            case "mp3": settings.AudioFormatKind = AudioFormatKind.Mp3; break;
+            case "wav": settings.AudioFormatKind = AudioFormatKind.Wav; break;
+            case "flac": settings.AudioFormatKind = AudioFormatKind.Flac; break;
+            case "mp4": settings.VideoFormat = VideoFormat.Mp4; break;
+            case "best": settings.VideoFormat = VideoFormat.Best; break;
+        }
+        UpdateOutputControls();
+    }
+
+    private void OnQualityChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (updatingControls || QualityBox.SelectedItem is not ComboBoxItem { Tag: { } tag }) return;
+        switch (tag)
+        {
+            case Mp3Bitrate bitrate: ViewModel.Settings.Mp3Bitrate = bitrate; break;
+            case VideoResolution resolution: ViewModel.Settings.VideoResolution = resolution; break;
+        }
+    }
+
+    private async void OnChooseFolder(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+        if (await picker.PickSingleFolderAsync() is { } folder) ViewModel.Settings.OutputDirectory = folder.Path;
+    }
+
+    // MARK: 주소·불러오기
+
+    private void OnUrlKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != VirtualKey.Enter) return;
+        e.Handled = true;
+        ViewModel.Submit();
+    }
+
+    private void OnFetch(object sender, RoutedEventArgs e) => ViewModel.Fetch();
+    private void OnCancelFetch(object sender, RoutedEventArgs e) => ViewModel.CancelFetch();
+    private void OnRetryFetch(object sender, RoutedEventArgs e) => ViewModel.RetryFetch();
+    private void OnSelectAll(object sender, RoutedEventArgs e) => ViewModel.SetAllEntriesSelected(true);
+    private void OnSelectNone(object sender, RoutedEventArgs e) => ViewModel.SetAllEntriesSelected(false);
+
+    private void OnAddToQueue(object sender, RoutedEventArgs e)
+    {
+        ViewModel.AddToQueue();
+        UrlBox.Focus(FocusState.Programmatic);
+    }
+
+    // MARK: 대기열
+
+    private void OnClearFinished(object sender, RoutedEventArgs e) => ViewModel.Queue.ClearFinished();
+    private void OnCancelAll(object sender, RoutedEventArgs e) => ViewModel.Queue.CancelAll();
+    private void OnResumeQueue(object sender, RoutedEventArgs e) => ViewModel.Queue.Resume();
+
+    private static QueueItem ItemOf(object sender) => (QueueItem)((FrameworkElement)sender).Tag;
+    private void OnRevealItem(object sender, RoutedEventArgs e) => ViewModel.Queue.Reveal(ItemOf(sender));
+    private void OnRetryItem(object sender, RoutedEventArgs e) => ViewModel.Queue.Retry(ItemOf(sender));
+    private void OnCancelItem(object sender, RoutedEventArgs e) => ViewModel.Queue.Cancel(ItemOf(sender));
+    private void OnRemoveItem(object sender, RoutedEventArgs e) => ViewModel.Queue.Remove(ItemOf(sender));
+
+    // MARK: 창
 
     /// <summary>Windows 11은 Mica, Mica를 쓸 수 없는 Windows 10은 테마에 맞는 단색 배경.</summary>
     private void ApplyBackdrop()
     {
-        if (MicaController.IsSupported())
-        {
-            SystemBackdrop = new MicaBackdrop();
-        }
-        else
-        {
-            RootGrid.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
-        }
-    }
-
-    private CancellationTokenSource? downloadCancel;
-
-    /// <summary>개발 확인용 다운로드: 주소 조회 → 고른 포맷으로 "다운로드" 폴더에 저장.</summary>
-    private async void OnDownload(object sender, RoutedEventArgs e)
-    {
-        var engine = EngineLocator.Bundled();
-        var client = new YtDlpClient(engine);
-        OutputFormat format = FormatBox.SelectedIndex switch
-        {
-            0 => new OutputFormat.Mp3(Mp3Bitrate.Kbps320),
-            1 => new OutputFormat.Wav(),
-            2 => new OutputFormat.Flac(),
-            3 => new OutputFormat.Video(VideoFormat.Mp4, VideoResolution.P1080),
-            _ => new OutputFormat.Video(VideoFormat.Best, VideoResolution.Best),
-        };
-        var downloads = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-        downloadCancel = new CancellationTokenSource();
-        DownloadButton.IsEnabled = false;
-        CancelButton.IsEnabled = true;
-        DownloadProgress.Value = 0;
-        try
-        {
-            var url = YouTubeUrl.Parse(UrlBox.Text);
-            DownloadStatus.Text = "영상 정보를 불러오는 중…";
-            var media = await client.FetchMediaAsync(url, downloadCancel.Token);
-            var (target, title) = media switch
-            {
-                FetchedMedia.OfVideo v => (url, v.Metadata.Title),
-                // 재생목록은 시험으로 받을 수 있는 첫 영상만 받는다(비공개·삭제된 영상은 건너뜀).
-                FetchedMedia.OfPlaylist p when p.Playlist.Entries.FirstOrDefault(x => !x.IsUnavailable) is { } first => (first.Url, first.Title),
-                FetchedMedia.OfPlaylist => throw new EngineException(EngineErrorKind.EmptyPlaylist),
-                _ => throw new InvalidOperationException(),
-            };
-            var dispatcher = DispatcherQueue;
-            var file = await client.ExtractAsync(target, new ExtractOptions(format, downloads), title, progress =>
-                dispatcher.TryEnqueue(() => ShowProgress(progress, format)), downloadCancel.Token);
-            DownloadProgress.Value = 1;
-            DownloadStatus.Text = $"저장했습니다: {file}";
-        }
-        catch (OperationCanceledException)
-        {
-            DownloadStatus.Text = "취소했습니다.";
-        }
-        catch (EngineException error)
-        {
-            DownloadStatus.Text = "실패: " + error.Message + (error.Detail is { Length: > 0 } d ? $"\n({d})" : "");
-        }
-        catch (Exception error)
-        {
-            DownloadStatus.Text = "실패: " + error.Message;
-        }
-        finally
-        {
-            DownloadButton.IsEnabled = true;
-            CancelButton.IsEnabled = false;
-            downloadCancel.Dispose();
-            downloadCancel = null;
-        }
-    }
-
-    private void OnCancel(object sender, RoutedEventArgs e) => downloadCancel?.Cancel();
-
-    private void ShowProgress(ExtractProgress progress, OutputFormat format)
-    {
-        switch (progress)
-        {
-            case ExtractProgress.Downloading d:
-                var verb = (format.IsVideo, d.Part) switch
-                {
-                    (true, DownloadPart.Video) => "영상 받는 중",
-                    (true, DownloadPart.Audio) => "오디오 받는 중",
-                    _ => "다운로드 중",
-                };
-                if (d.Fraction is { } f)
-                {
-                    DownloadProgress.Value = format.IsVideo ? ExtractProgress.Overall(f, d.Part) : f;
-                    DownloadStatus.Text = $"{verb} {ExtractProgress.DisplayPercent(f)}%" + (d.SecondsRemaining is { } s ? $" · 약 {s}초 남음" : "");
-                }
-                break;
-            case ExtractProgress.Converting:
-                DownloadStatus.Text = "변환 중…";
-                break;
-            case ExtractProgress.Merging:
-                DownloadStatus.Text = "영상과 오디오를 합치는 중…";
-                break;
-            case ExtractProgress.EmbeddingMetadata:
-                DownloadStatus.Text = "제목 정보를 넣는 중…";
-                break;
-        }
+        if (MicaController.IsSupported()) SystemBackdrop = new MicaBackdrop();
+        else RootGrid.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
     }
 
     [DllImport("user32.dll")]
