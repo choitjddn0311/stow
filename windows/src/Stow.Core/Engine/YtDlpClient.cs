@@ -1,9 +1,10 @@
+using Stow.Core.Features;
 using Stow.Core.Models;
 
 namespace Stow.Core.Engine;
 
 /// <summary>yt-dlp로 영상 정보를 조회하고 오디오를 추출하거나 영상을 받는다(Mac 앱 YtDlpClient와 같은 흐름).</summary>
-public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = null)
+public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = null) : IExtractEngine
 {
     private readonly ProcessRunner runner = runner ?? new ProcessRunner();
 
