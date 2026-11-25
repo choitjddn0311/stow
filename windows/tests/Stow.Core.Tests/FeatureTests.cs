@@ -5,6 +5,15 @@ using Stow.Core.Settings;
 
 namespace Stow.Core.Tests;
 
+/// <summary>테스트용(디스크에 쓰지 않음). 직렬화 왕복으로 실제 저장처럼 값을 복사한다.</summary>
+internal sealed class MemorySettingsStore : ISettingsStore
+{
+    private string? json;
+    public SettingsData? Load() => json is null ? null : System.Text.Json.JsonSerializer.Deserialize<SettingsData>(json);
+    public void Save(SettingsData data) => json = System.Text.Json.JsonSerializer.Serialize(data);
+}
+
+
 /// <summary>제목으로 동작을 정하는 가짜 엔진: "fail"은 네트워크 오류, "blocked"는 유튜브 차단, "gate"는 Release까지 대기.</summary>
 internal sealed class FakeEngine : IExtractEngine
 {
@@ -174,6 +183,12 @@ public class ExtractQueueTests
         // 차단으로 실패한 항목도 다시 시도한다(이번에도 막히면 다시 멈춤).
         Assert.Equal(["blocked a", "blocked a"], engine.Extracted);
         Assert.True(queue.IsPaused);
+
+        // 막힌 항목을 지우면 멈춤 경고도 사라지고 남은 항목을 이어 간다.
+        queue.ClearFinished();
+        await queue.WaitUntilIdleAsync();
+        Assert.False(queue.IsPaused);
+        Assert.Null(queue.BlockedMessage);
         Directory.Delete(dir, true);
     }
 
@@ -269,6 +284,8 @@ public class ExtractViewModelTests
         Assert.Equal(2, model.PendingAddCount);
         Assert.Equal("2개 추출", model.AddButtonTitle);
         Assert.Equal("영상 900개 중 처음 3개", model.PlaylistSummary);
+        model.SetAllEntriesSelected(true);
+        Assert.Equal(2, model.PendingAddCount);  // 비공개 영상은 "모두 선택"에도 빠진다
         model.PlaylistEntries[0].IsSelected = false;
         Assert.Equal("1개 추출", model.AddButtonTitle);
         model.AddToQueue();
@@ -292,6 +309,32 @@ public class ExtractViewModelTests
         model.UrlText = "https://youtu.be/zzzzzzzzzzz";
         Assert.Equal(ExtractStage.Idle, model.Stage);
         Assert.Null(model.Video);
+        Directory.Delete(dir, true);
+    }
+
+    [Fact]
+    public async Task IncompleteUrlDoesNotFlashAnError()
+    {
+        var (model, engine, _, dir) = Make();
+        model.UrlText = "https://youtu";
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Equal(ExtractStage.Idle, model.Stage);
+        Assert.Equal(0, engine.FetchCount);
+        Directory.Delete(dir, true);
+    }
+
+    [Fact]
+    public async Task EnterWithTrailingSpaceAddsInsteadOfRefetching()
+    {
+        var (model, engine, queue, dir) = Make();
+        model.UrlText = "https://youtu.be/abcdefghijk";
+        model.Fetch();
+        await model.WaitForFetchAsync();
+        model.UrlText = "https://youtu.be/abcdefghijk ";
+        model.Submit();
+        Assert.Single(queue.Items);
+        Assert.Equal(1, engine.FetchCount);
+        await queue.WaitUntilIdleAsync();
         Directory.Delete(dir, true);
     }
 

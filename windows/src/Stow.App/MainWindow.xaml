@@ -149,7 +149,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" Content="{x:Bind Title}" />
+                                        <CheckBox IsChecked="{x:Bind IsSelected, Mode=TwoWay}" Content="{x:Bind Title}" IsEnabled="{x:Bind IsAvailable}" />
                                         <TextBlock Grid.Column="1" Text="{x:Bind DurationText}" VerticalAlignment="Center"
                                                    Style="{StaticResource CardDescriptionStyle}" />
                                     </Grid>

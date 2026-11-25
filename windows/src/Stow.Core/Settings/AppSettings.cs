@@ -66,14 +66,6 @@ public sealed class JsonFileSettingsStore(string path) : ISettingsStore
     }
 }
 
-/// <summary>테스트용(디스크에 쓰지 않음). 직렬화 왕복으로 실제 저장처럼 값을 복사한다.</summary>
-public sealed class MemorySettingsStore : ISettingsStore
-{
-    private string? json;
-    public SettingsData? Load() => json is null ? null : JsonSerializer.Deserialize<SettingsData>(json);
-    public void Save(SettingsData data) => json = JsonSerializer.Serialize(data);
-}
-
 /// <summary>사용자 설정(Mac 앱 AppSettings와 같은 값). 바뀔 때마다 저장한다.</summary>
 public sealed class AppSettings : ObservableObject
 {

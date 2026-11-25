@@ -14,6 +14,7 @@ public sealed class PlaylistEntryItem(PlaylistEntry entry, Action changed) : Obs
     public string Title => Entry.Title;
     public string DurationText => Entry.Duration is { } d ? DisplayText.Duration(d) : "";
     public bool IsUnavailable => Entry.IsUnavailable;
+    public bool IsAvailable => !Entry.IsUnavailable;
 
     private bool isSelected = !entry.IsUnavailable;
     public bool IsSelected
@@ -186,7 +187,8 @@ public sealed class ExtractViewModel : ObservableObject
     /// <summary>주소 입력란에서 Enter: 불러온 주소 그대로면 대기열에 추가, 아니면 불러오기.</summary>
     public void Submit()
     {
-        if (CanAddToQueue && UrlText == loadedUrlText) AddToQueue();
+        // 앞뒤 공백만 다르면 같은 주소로 본다(주소 변경 처리와 같은 기준).
+        if (CanAddToQueue && loadedUrlText is not null && UrlText.Trim() == loadedUrlText.Trim()) AddToQueue();
         else Fetch();
     }
 
@@ -222,9 +224,10 @@ public sealed class ExtractViewModel : ObservableObject
 
     public void CancelFetch() => fetchCancel?.Cancel();
 
+    /// <summary>"모두 선택"·"모두 해제". 받을 수 없는 영상(비공개·삭제)은 고르지 않는다.</summary>
     public void SetAllEntriesSelected(bool selected)
     {
-        foreach (var entry in PlaylistEntries) entry.IsSelected = selected;
+        foreach (var entry in PlaylistEntries) entry.IsSelected = selected && !entry.IsUnavailable;
     }
 
     /// <summary>처음 상태로 돌아간다(주소란 비움).</summary>
@@ -306,6 +309,8 @@ public sealed class ExtractViewModel : ObservableObject
         {
             return;
         }
+        // 입력 중인 미완성 주소는 조용히 기다린다(오류는 직접 "불러오기"·Enter 때만 보인다).
+        try { YouTubeUrl.Parse(UrlText); } catch (EngineException) { return; }
         Fetch();
     }
 }

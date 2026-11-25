@@ -178,6 +178,7 @@ public sealed class ExtractQueue(IExtractEngine engine, ICompletionNotifier noti
     {
         if (item == running) return;
         Items.Remove(item);
+        ResumeIfNothingBlocked();
         Changed();
     }
 
@@ -202,7 +203,16 @@ public sealed class ExtractQueue(IExtractEngine engine, ICompletionNotifier noti
     public void ClearFinished()
     {
         foreach (var item in Items.Where(i => i.IsFinished).ToList()) Items.Remove(item);
+        ResumeIfNothingBlocked();
         Changed();
+    }
+
+    /// <summary>차단으로 멈춘 뒤 막힌 항목을 모두 지웠으면 멈춤을 풀고 남은 항목을 이어 간다(빈 경고가 남지 않게).</summary>
+    private void ResumeIfNothingBlocked()
+    {
+        if (!IsPaused || Items.Any(i => i.Error?.Kind == EngineErrorKind.BlockedByYouTube)) return;
+        Unpause();
+        StartNextIfNeeded();
     }
 
     /// <summary>차단으로 멈춘 대기열을 이어 간다.</summary>

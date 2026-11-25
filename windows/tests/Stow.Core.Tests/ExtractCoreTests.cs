@@ -221,6 +221,26 @@ public class FileNamingTests
 public class MoveToDestinationTests
 {
     [Fact]
+    public void CleansOnlyOldWorkDirectories()
+    {
+        var root = Directory.CreateTempSubdirectory("stow-clean-");
+        try
+        {
+            var old = Directory.CreateDirectory(Path.Combine(root.FullName, "stow-old"));
+            File.WriteAllText(Path.Combine(old.FullName, "part"), "x");
+            old.LastWriteTimeUtc = DateTime.UtcNow.AddDays(-2);
+            var fresh = Directory.CreateDirectory(Path.Combine(root.FullName, "stow-new"));
+            var other = Directory.CreateDirectory(Path.Combine(root.FullName, "other"));
+            other.LastWriteTimeUtc = DateTime.UtcNow.AddDays(-2);
+            YtDlpClient.CleanStaleWorkDirectories(root.FullName, TimeSpan.FromHours(1));
+            Assert.False(old.Exists && Directory.Exists(old.FullName));
+            Assert.True(Directory.Exists(fresh.FullName));
+            Assert.True(Directory.Exists(other.FullName));  // Stow 작업 폴더가 아니면 건드리지 않는다
+        }
+        finally { root.Delete(true); }
+    }
+
+    [Fact]
     public void NumbersDuplicatesInsteadOfOverwriting()
     {
         var dir = Directory.CreateTempSubdirectory("stow-move-");

@@ -11,18 +11,15 @@ internal sealed partial class WindowsNotifier : ICompletionNotifier
     private const string FileArgument = "file";
     private bool registered;
 
-    public void Prepare()
+    /// <summary>앱 시작 때 한 번. 알림을 누르면 저장한 파일을 탐색기에서 보여 준다(앱이 꺼진 뒤 눌러도 앱이 켜지며 처리).</summary>
+    public void Register()
     {
         if (registered) return;
-        registered = true;
         try
         {
-            // 알림을 누르면 저장한 파일을 탐색기에서 보여 준다.
-            AppNotificationManager.Default.NotificationInvoked += (_, args) =>
-            {
-                if (args.Arguments.TryGetValue(FileArgument, out var file)) Reveal(file);
-            };
+            AppNotificationManager.Default.NotificationInvoked += (_, args) => HandleActivation(args);
             AppNotificationManager.Default.Register();
+            registered = true;
         }
         catch (Exception)
         {
@@ -30,8 +27,16 @@ internal sealed partial class WindowsNotifier : ICompletionNotifier
         }
     }
 
+    public void HandleActivation(AppNotificationActivatedEventArgs args)
+    {
+        if (args.Arguments.TryGetValue(FileArgument, out var file) && File.Exists(file)) Reveal(file);
+    }
+
+    public void Prepare() => Register();
+
     public void NotifyCompleted(string title, string file)
     {
+        if (!registered) return;
         try
         {
             var notification = new AppNotificationBuilder()
@@ -54,11 +59,6 @@ internal sealed partial class WindowsNotifier : ICompletionNotifier
         if (pidl == IntPtr.Zero) return;
         try { _ = SHOpenFolderAndSelectItems(pidl, 0, IntPtr.Zero, 0); }
         finally { ILFree(pidl); }
-    }
-
-    public static void Unregister()
-    {
-        try { AppNotificationManager.Default.Unregister(); } catch (Exception) { }
     }
 
     [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]

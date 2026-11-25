@@ -21,14 +21,17 @@ public sealed partial class MainWindow : Window
     private const int InitialWidth = 1040;
     private const int InitialHeight = 760;
 
-    private readonly WindowsNotifier notifier = new();
     private readonly EngineLocator engine = EngineLocator.Bundled();
     /// <summary>코드에서 컨트롤 값을 맞추는 동안 바뀜 이벤트를 무시한다.</summary>
     private bool updatingControls;
+    /// <summary>컨트롤 다시 만들기를 한 번으로 모은다(설정 하나를 바꿔도 알림이 여러 개 온다).</summary>
+    private bool rebuildPending;
+    /// <summary>창을 닫으며 진행 중인 추출을 정리하는 중</summary>
+    private bool closing;
 
     public ExtractViewModel ViewModel { get; }
 
-    public MainWindow()
+    internal MainWindow(WindowsNotifier notifier)
     {
         var dataDirectory = AppInfo.DataDirectory(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         var settings = new AppSettings(new JsonFileSettingsStore(Path.Combine(dataDirectory, "settings.json")));
@@ -36,6 +39,10 @@ public sealed partial class MainWindow : Window
         ViewModel = new ExtractViewModel(settings, client, new ExtractQueue(client, notifier));
 
         InitializeComponent();
+        var informational = typeof(MainWindow).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "0.0.0";
+        Title = $"Stow {AppInfo.DisplayVersion(informational)}";
         ApplyBackdrop();
         var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)Math.Round(InitialWidth * scale), (int)Math.Round(InitialHeight * scale)));
@@ -44,10 +51,29 @@ public sealed partial class MainWindow : Window
         EngineInfoBar.IsOpen = missing.Count > 0;
         EngineInfoBar.Message = $"앱을 다시 설치해 주세요. 없는 구성 요소: {string.Join(", ", missing)}";
 
-        settings.PropertyChanged += (_, _) => UpdateOutputControls();
+        // 종류·포맷이 바뀔 때만 컨트롤을 다시 만든다(음질·해상도는 고른 컨트롤이 이미 그 값이다).
+        settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(AppSettings.MediaKind) or nameof(AppSettings.AudioFormatKind) or nameof(AppSettings.VideoFormat))
+            {
+                ScheduleRebuild();
+            }
+        };
         UpdateOutputControls();
         RootGrid.Loaded += OnLoaded;
-        Closed += OnClosed;
+        AppWindow.Closing += OnClosing;
+    }
+
+    /// <summary>클릭 처리가 끝난 뒤 한 번 다시 만든다(누른 버튼을 그 클릭 안에서 지우지 않게).</summary>
+    private void ScheduleRebuild()
+    {
+        if (rebuildPending) return;
+        rebuildPending = true;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            rebuildPending = false;
+            UpdateOutputControls();
+        });
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -59,13 +85,38 @@ public sealed partial class MainWindow : Window
             return;
         }
         UrlBox.Focus(FocusState.Programmatic);
+        await CheckEngineAsync();
     }
 
-    private void OnClosed(object sender, WindowEventArgs args)
+    /// <summary>엔진이 이 PC에서 실행되는지 시작할 때 확인한다(파일은 있는데 실행이 안 되는 경우를 첫 추출 전에 알린다).</summary>
+    private async Task CheckEngineAsync()
     {
-        // 진행 중인 추출을 끝낸다(엔진 프로세스는 Job Object로 함께 끝난다).
-        ViewModel.Queue.CancelAll();
-        WindowsNotifier.Unregister();
+        if (engine.MissingComponents().Count > 0) return;  // 이미 위에서 안내함
+        try
+        {
+            var failed = (await Task.Run(() => EngineCheck.RunAsync(engine, new ProcessRunner()))).Where(r => !r.IsOk).ToList();
+            if (failed.Count == 0) return;
+            EngineInfoBar.Title = "추출 엔진을 실행하지 못했습니다";
+            EngineInfoBar.Message = "앱을 다시 설치해 주세요. 백신 프로그램이 막았을 수도 있습니다. "
+                + string.Join(" / ", failed.Select(r => $"{r.Name}: {r.Detail}"));
+            EngineInfoBar.IsOpen = true;
+        }
+        catch (Exception)
+        {
+            // 확인 자체가 실패해도 앱은 쓸 수 있다(추출할 때 오류로 알린다).
+        }
+    }
+
+    /// <summary>
+    /// 창을 닫을 때 진행 중인 추출이 있으면 취소하고 정리(작업 폴더 삭제)가 끝날 때까지 잠깐(최대 5초) 기다린 뒤 닫는다.
+    /// </summary>
+    private async void OnClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (closing || !ViewModel.Queue.IsRunning) return;
+        args.Cancel = true;
+        closing = true;
+        await Task.WhenAny(ViewModel.Queue.CancelAndWaitAsync(), Task.Delay(TimeSpan.FromSeconds(5)));
+        Close();
     }
 
     /// <summary>첫 실행 이용 고지. 동의하면 true, "종료"면 false.</summary>
@@ -164,13 +215,16 @@ public sealed partial class MainWindow : Window
 
     private void OnKindClick(object sender, RoutedEventArgs e)
     {
-        ViewModel.Settings.MediaKind = (string)((FrameworkElement)sender).Tag == "video" ? MediaKind.Video : MediaKind.Audio;
-        UpdateOutputControls();  // 같은 값을 다시 눌러도 버튼 상태를 되돌린다
+        var kind = (string)((FrameworkElement)sender).Tag == "video" ? MediaKind.Video : MediaKind.Audio;
+        // 이미 고른 것을 다시 누르면 토글 버튼이 꺼지므로 상태를 되돌린다(바뀌면 설정 알림으로 다시 만든다).
+        if (ViewModel.Settings.MediaKind == kind) ScheduleRebuild();
+        else ViewModel.Settings.MediaKind = kind;
     }
 
     private void OnFormatClick(object sender, RoutedEventArgs e)
     {
         var settings = ViewModel.Settings;
+        var before = settings.Format;
         switch ((string)((FrameworkElement)sender).Tag)
         {
             case "mp3": settings.AudioFormatKind = AudioFormatKind.Mp3; break;
@@ -179,7 +233,7 @@ public sealed partial class MainWindow : Window
             case "mp4": settings.VideoFormat = VideoFormat.Mp4; break;
             case "best": settings.VideoFormat = VideoFormat.Best; break;
         }
-        UpdateOutputControls();
+        if (settings.Format == before) ScheduleRebuild();  // 같은 것을 다시 눌러 꺼진 토글 되돌리기
     }
 
     private void OnQualityChanged(object sender, SelectionChangedEventArgs e)

@@ -94,6 +94,23 @@ public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = nu
         }
     }
 
+    /// <summary>
+    /// 앱이 추출 중에 비정상 종료되어 남은 작업 폴더(<c>stow-…</c>)를 지운다. 지금 실행 중인 다른 Stow의 폴더를
+    /// 지우지 않도록 오래된 것만 지운다. 실패는 무시한다(다음 실행 때 다시 시도).
+    /// </summary>
+    public static void CleanStaleWorkDirectories(string root, TimeSpan olderThan)
+    {
+        try
+        {
+            foreach (var directory in new DirectoryInfo(root).EnumerateDirectories("stow-*"))
+            {
+                if (DateTime.UtcNow - directory.LastWriteTimeUtc < olderThan) continue;
+                try { directory.Delete(recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+    }
+
     private async Task<ProcessResult> RunAsync(ProcessCommand command, Action<OutputLine>? onLine, CancellationToken cancellationToken)
     {
         // 엔진 파일이 빠져 있으면 실행하기 전에 알린다(python.exe가 있어도 yt-dlp·ffmpeg가 없으면 알 수 없는 오류가 된다).
