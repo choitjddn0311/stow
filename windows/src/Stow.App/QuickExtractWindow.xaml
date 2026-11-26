@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Stow.QuickExtractWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Stow"
+    Title="Stow 빠른 추출">
+
+    <!-- 빠른 추출(시안 A): 화면 위쪽 가운데에 뜨는 작은 창. 주소 · 영상 정보 · 포맷·폴더 칩과 추가 버튼.
+         창 크기는 내용 높이에 맞춰 코드에서 바꾼다. -->
+    <Grid x:Name="RootGrid" Padding="12" RowSpacing="10" KeyDown="OnRootKeyDown">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <FontIcon Glyph="&#xE71B;" FontSize="18" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBox x:Name="UrlBox" Grid.Column="1" FontSize="15" PlaceholderText="유튜브 영상·재생목록 주소를 붙여 넣으세요"
+                     Text="{x:Bind Model.Extract.UrlText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                     AutomationProperties.Name="주소" />
+            <ProgressRing Grid.Column="2" Width="18" Height="18" IsActive="{x:Bind Model.Extract.IsFetching, Mode=OneWay}"
+                          Visibility="{x:Bind Model.Extract.IsFetching, Mode=OneWay}" />
+        </Grid>
+
+        <!-- 내용: 안내 · 영상 · 재생목록 · 오류 -->
+        <StackPanel Grid.Row="1" Spacing="6">
+            <TextBlock x:Name="HintText" Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       TextWrapping="Wrap" />
+            <Grid ColumnSpacing="12" Visibility="{x:Bind Model.Extract.HasVideo, Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="96" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border CornerRadius="4" Background="{ThemeResource SubtleFillColorSecondaryBrush}" Height="54">
+                    <Image Source="{x:Bind local:Ui.Thumbnail(Model.Extract.Video), Mode=OneWay}" Stretch="UniformToFill" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{x:Bind Model.Extract.Video.Title, Mode=OneWay, FallbackValue=''}" Style="{StaticResource BodyStrongTextBlockStyle}"
+                               TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                    <TextBlock Text="{x:Bind Model.Extract.VideoSubtitle, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Grid>
+            <Grid Visibility="{x:Bind Model.Extract.HasPlaylist, Mode=OneWay}" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{x:Bind Model.Extract.Playlist.Title, Mode=OneWay, FallbackValue=''}" Style="{StaticResource BodyStrongTextBlockStyle}"
+                               TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                    <TextBlock Text="{x:Bind Model.Extract.PlaylistSummary, Mode=OneWay}" Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <HyperlinkButton Grid.Column="1" Content="메인 창에서 골라 받기" Click="OnOpenInMainWindow" />
+            </Grid>
+            <TextBlock Text="{x:Bind Model.Extract.ErrorMessage, Mode=OneWay}" Visibility="{x:Bind Model.Extract.HasError, Mode=OneWay}"
+                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <Grid Grid.Row="2" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <DropDownButton x:Name="FormatButton" AutomationProperties.Name="포맷">
+                <DropDownButton.Flyout>
+                    <MenuFlyout x:Name="FormatMenu" Placement="BottomEdgeAlignedLeft" Opening="OnFormatMenuOpening" />
+                </DropDownButton.Flyout>
+            </DropDownButton>
+            <DropDownButton x:Name="FolderButton" Grid.Column="1" AutomationProperties.Name="저장 위치">
+                <DropDownButton.Flyout>
+                    <MenuFlyout x:Name="FolderMenu" Placement="BottomEdgeAlignedLeft" Opening="OnFolderMenuOpening" />
+                </DropDownButton.Flyout>
+            </DropDownButton>
+            <TextBlock Grid.Column="3" Text="Enter 추가 · Esc 닫기" VerticalAlignment="Center"
+                       Style="{StaticResource CaptionTextBlockStyle}" Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+            <Button x:Name="AddButton" Grid.Column="4" Style="{StaticResource AccentButtonStyle}" Click="OnAdd"
+                    Content="{x:Bind Model.Extract.AddButtonTitle, Mode=OneWay}" />
+        </Grid>
+    </Grid>
+</Window>

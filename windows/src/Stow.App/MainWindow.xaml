@@ -227,6 +227,71 @@
                     </Grid>
                 </Border>
                 <TextBlock x:Name="FormatNote" Style="{StaticResource CardDescriptionStyle}" Margin="2,6,0,0" />
+
+                <TextBlock Text="빠른 추출" Style="{StaticResource SectionStyle}" />
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE765;" Style="{StaticResource CardIconStyle}" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="단축키" />
+                            <TextBlock x:Name="HotKeyDescription" Style="{StaticResource CardDescriptionStyle}" />
+                        </StackPanel>
+                        <ItemsControl x:Name="HotKeyKeys" Grid.Column="2" VerticalAlignment="Center" IsTabStop="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="4" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Border BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1,1,1,2"
+                                            Background="{ThemeResource ControlFillColorDefaultBrush}" CornerRadius="4" Padding="8,2">
+                                        <TextBlock Text="{x:Bind}" Style="{StaticResource CaptionTextBlockStyle}" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Grid.Column="3" Content="변경" Click="OnChangeHotKey" Margin="8,0,0,0" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE7C4;" Style="{StaticResource CardIconStyle}" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="창을 닫으면 트레이에 남기" />
+                            <TextBlock Text="끄면 창을 닫을 때 Stow가 완전히 끝나고 단축키도 동작하지 않습니다." Style="{StaticResource CardDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="2" MinWidth="0" OnContent="켬" OffContent="끔" AutomationProperties.Name="창을 닫으면 트레이에 남기"
+                                      IsOn="{x:Bind ViewModel.Settings.KeepRunningInTray, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE7E8;" Style="{StaticResource CardIconStyle}" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Windows를 시작할 때 실행" />
+                            <TextBlock Text="창 없이 트레이에서 조용히 시작해 바로 단축키를 쓸 수 있습니다." Style="{StaticResource CardDescriptionStyle}" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="StartupSwitch" Grid.Column="2" MinWidth="0" OnContent="켬" OffContent="끔"
+                                      AutomationProperties.Name="Windows를 시작할 때 실행" Toggled="OnStartupToggled" />
+                    </Grid>
+                </Border>
             </StackPanel>
         </ScrollViewer>
 
