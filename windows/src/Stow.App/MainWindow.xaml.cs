@@ -33,7 +33,7 @@ public sealed partial class MainWindow : Window
 
     internal MainWindow(WindowsNotifier notifier)
     {
-        var dataDirectory = AppInfo.DataDirectory(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        var dataDirectory = AppInfo.DataDirectory(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
         var settings = new AppSettings(new JsonFileSettingsStore(Path.Combine(dataDirectory, "settings.json")));
         var client = new YtDlpClient(engine);
         ViewModel = new ExtractViewModel(settings, client, new ExtractQueue(client, notifier));

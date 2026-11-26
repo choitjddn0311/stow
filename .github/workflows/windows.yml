@@ -21,9 +21,10 @@ on:
 permissions:
   contents: read
 
+# PR은 새 커밋이 오면 이전 실행을 취소하고, 수동 실행(릴리스)은 취소하지 않는다(반쯤 올린 릴리스가 남지 않게).
 concurrency:
-  group: windows-${{ github.ref }}
-  cancel-in-progress: true
+  group: windows-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   engine:
@@ -154,7 +155,9 @@ jobs:
           retention-days: 7
 
   # 설치 파일(Velopack: 사용자 폴더에 설치, 관리자 권한 불필요)을 만들고 초안 릴리스를 만든다.
-  # Mac 앱의 자동 업데이트가 releases/latest를 읽으므로 Windows 릴리스는 "최신"으로 표시하지 않는다.
+  # Mac 앱의 자동 업데이트가 releases/latest를 읽으므로 Windows 릴리스는 절대 "최신"이 되면 안 된다.
+  # 초안에는 --latest=false가 적용되지 않고 웹에서 공개할 때 "최신" 체크가 기본으로 켜져 있으므로,
+  # 사전 공개(pre-release)로 만든다. GitHub는 사전 공개를 최신으로 고르지 않는다.
   release:
     needs: [windows-build, lgpl-sources]
     if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
@@ -193,8 +196,12 @@ jobs:
           $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
           if (-not $version) { Write-Error "Directory.Build.props에서 버전을 읽지 못함"; exit 1 }
           $tag = "win-v$version"
-          gh release view $tag 2>$null
-          if ($LASTEXITCODE -eq 0) { Write-Error "$tag 릴리스가 이미 있습니다. 버전을 올리세요."; exit 1 }
+          # 같은 버전이 공개돼 있으면 멈춘다. 지난 실행이 남긴 초안이면 지우고 다시 만든다(실패한 실행 다시 돌리기).
+          $existing = gh release view $tag --json isDraft --jq .isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if ($existing -eq 'true') { gh release delete $tag --yes; if ($LASTEXITCODE -ne 0) { exit 1 } }
+            else { Write-Error "$tag 릴리스가 이미 공개돼 있습니다. 버전을 올리세요."; exit 1 }
+          }
           $notes = "../docs/release/notes/win-$version.md"
           if (-not (Test-Path $notes)) { Write-Error "$notes 가 없습니다"; exit 1 }
           dotnet tool install --global vpk --version 1.2.161
@@ -231,9 +238,8 @@ jobs:
           ### LGPL 소스
           앱에 들어 있는 FFmpeg·LAME(LGPL)의 원본 소스는 아래 Assets의 ``ffmpeg-*.tar.xz``, ``lame-*.tar.gz``입니다. 빌드 방법은 이 버전 소스 코드의 ``windows/scripts/build-ffmpeg.sh``에 있습니다.
           "@
-          $body = ($body -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
           Set-Content -Path release-notes.md -Value $body -Encoding utf8
-          gh release create $env:tag (Get-ChildItem releases -File).FullName --draft --latest=false `
+          gh release create $env:tag (Get-ChildItem releases -File).FullName --draft --prerelease --latest=false `
             --target $env:GITHUB_SHA --title "Stow for Windows $env:version" --notes-file release-notes.md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release view $env:tag --json url,isDraft,assets --jq '.url, .isDraft, (.assets[].name)'
