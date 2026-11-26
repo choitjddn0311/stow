@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Stow — Save YouTube audio and video on your Mac</title>
-<meta name="description" content="A free, open-source macOS app that saves YouTube audio (MP3, WAV, FLAC) or video (MP4). Just paste a link.">
-<meta property="og:title" content="Stow — Save YouTube audio and video on your Mac">
+<title>Stow — Save YouTube audio and video on your computer</title>
+<meta name="description" content="A free, open-source app for Mac and Windows that saves YouTube audio (MP3, WAV, FLAC) or video (MP4). Just paste a link.">
+<meta property="og:title" content="Stow — Save YouTube audio and video on your computer">
 <meta property="og:description" content="Paste a link, get MP3, WAV, FLAC, or MP4 video. No ads, no sign-ups.">
 <meta property="og:image" content="https://choitjddn0311.github.io/stow/images/main-light.png">
 <meta property="og:type" content="website">
@@ -32,13 +32,14 @@
 <main>
   <div class="wrap hero">
     <img class="icon" src="../images/icon.png" alt="Stow app icon" width="112" height="112">
-    <h1>One link.<br>Audio and video, on your Mac.</h1>
+    <h1>One link.<br>Audio and video, on your computer.</h1>
     <p class="lead">Paste a YouTube link and save it as MP3, WAV, or FLAC audio, or as MP4 video. No ads, no sign-ups, no download sites that change their address every week.</p>
-    <div class="cta">
-      <a class="btn" href="https://github.com/choitjddn0311/stow/releases/latest">Download free</a>
+    <div class="cta" data-downloads>
+      <a class="btn" data-os="mac" href="https://github.com/choitjddn0311/stow/releases/latest">Download for Mac</a>
+      <a class="btn alt" data-os="win" href="https://github.com/choitjddn0311/stow/releases/download/win-v0.1.0/Stow-win-x64-Setup.exe">Download for Windows</a>
       <a class="tlink" href="#try">Try it here ›</a>
     </div>
-    <p class="req">macOS 14 or later · Apple Silicon · Open source (MIT)</p>
+    <p class="req">Mac: macOS 14+, Apple Silicon · Windows: 10 and 11 · Free and open source (MIT)</p>
     <img class="shot only-light" src="../images/main-light.png" alt="Stow main window: loaded video info, output settings, and the extraction queue" width="668" height="940">
     <img class="shot only-dark" src="../images/main-dark.png" alt="Stow main window: loaded video info, output settings, and the extraction queue" width="668" height="940">
   </div>
@@ -134,7 +135,7 @@
     <div><h3>Paste and go</h3><p>Title, channel, duration, and thumbnail load as soon as you paste a link.</p></div>
     <div><h3>Safe saving</h3><p>Never overwrites a file with the same name; it adds a number instead. Remembers your folder and format.</p></div>
     <div><h3>Stays up to date</h3><p>New app versions are offered in-app, and the extraction engine (yt-dlp) updates itself when YouTube changes.</p></div>
-    <div><h3>Feels like macOS</h3><p>System Settings–style layout, light and dark mode, full keyboard control, VoiceOver support.</p></div>
+    <div><h3>Feels at home</h3><p>Looks like each system's own Settings app, with light and dark mode and full keyboard control. VoiceOver support on Mac.</p></div>
     <div><h3>Free and open source</h3><p>Released under the MIT License. No ads, no sign-ups.</p></div>
     <div><h3>Runs on your Mac</h3><p>No account, no server. Audio and video are processed on your Mac and saved to the folder you choose.</p></div>
   </section>
@@ -143,25 +144,36 @@
     <div>
       <p class="eyebrow">Install</p>
       <h2>Allow it once, and you're set.</h2>
-      <p class="section-lead">Stow isn't signed or notarized by Apple yet, so macOS asks you to confirm the first time you open it.</p>
+      <p class="section-lead">Stow isn't code-signed by Apple or Microsoft yet, so your system asks you to confirm the first time you open it.</p>
     </div>
+    <div class="steps">
+    <h3>Mac</h3>
     <ol>
       <li>Download <b>Stow-&lt;version&gt;.dmg</b> from <a href="https://github.com/choitjddn0311/stow/releases/latest">Releases</a>, open it, and drag Stow into Applications.</li>
       <li><b>macOS 15 or later</b>: opening Stow shows a warning. Click "Done", then go to <b>System Settings → Privacy &amp; Security</b> and click "Open Anyway". Open Stow again and click "Open".</li>
       <li><b>macOS 14</b>: Control-click Stow in Applications → "Open" → click "Open" in the warning.</li>
       <li>After that it opens normally, and new versions install from inside the app.</li>
     </ol>
+    <h3>Windows</h3>
+    <ol>
+      <li>Download <b>Stow-win-x64-Setup.exe</b> from the <a href="https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0">Windows release</a> and run it. For ARM PCs such as Snapdragon, use <b>Stow-win-arm64-Setup.exe</b>.</li>
+      <li>If "Windows protected your PC" appears, click <b>More info → Run anyway</b>.</li>
+      <li>It installs to your account without admin rights and adds Stow to the Start menu. Uninstall it from Settings → Apps.</li>
+      <li>The Windows version is 0.1. Quick extract and automatic updates come in the next version.</li>
+    </ol>
+    </div>
   </section>
 
   <section class="end">
     <div class="wrap">
       <h2>Get it free.</h2>
-      <div class="cta"><a class="btn" href="https://github.com/choitjddn0311/stow/releases/latest">Download Stow</a><a class="tlink" href="https://github.com/choitjddn0311/stow">View on GitHub ›</a></div>
-      <p class="req">macOS 14 or later · Apple Silicon (M1 or later)</p>
+      <div class="cta" data-downloads><a class="btn" data-os="mac" href="https://github.com/choitjddn0311/stow/releases/latest">Download for Mac</a><a class="btn alt" data-os="win" href="https://github.com/choitjddn0311/stow/releases/download/win-v0.1.0/Stow-win-x64-Setup.exe">Download for Windows</a><a class="tlink" href="https://github.com/choitjddn0311/stow">View on GitHub ›</a></div>
+      <p class="req">Mac: macOS 14+, Apple Silicon (M1 or later) · Windows: 10 (22H2) and 11, x64 and ARM</p>
       <p class="fine">Use Stow only for content you have the rights to. The developer of Stow accepts no legal liability for content downloaded with Stow or its use. Stow is not affiliated with YouTube or Google.<br>© choitjddn0311 · <a href="https://github.com/choitjddn0311/stow/blob/main/LICENSE">MIT License</a></p>
     </div>
   </section>
 </main>
 <script src="../assets/demo.js" defer></script>
+<script src="../assets/os.js" defer></script>
 </body>
 </html>

@@ -4,16 +4,17 @@
 
 # Stow
 
-**A native macOS app that saves YouTube audio (MP3, WAV, FLAC) or video (MP4) — just paste a link**
+**A native Mac and Windows app that saves YouTube audio (MP3, WAV, FLAC) or video (MP4) — just paste a link**
 
-No ads, no sign-ups, no shady download sites that change their address every week. Everything runs on your Mac.
+No ads, no sign-ups, no shady download sites that change their address every week. Everything runs on your computer.
 
 [![Latest release](https://img.shields.io/github/v/release/choitjddn0311/stow?label=release&color=12907F)](https://github.com/choitjddn0311/stow/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555?logo=apple)](#requirements)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2B-555)](#requirements)
+[![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11%20(0.1)-555)](#windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[**Download**](https://github.com/choitjddn0311/stow/releases/latest) · [Website](https://choitjddn0311.github.io/stow/en/) · [Usage](#usage) · [FAQ](#faq) · [한국어](README.md)
+[**Download for Mac**](https://github.com/choitjddn0311/stow/releases/latest) · [**Download for Windows**](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0) · [Website](https://choitjddn0311.github.io/stow/en/) · [Usage](#usage) · [FAQ](#faq) · [한국어](README.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">
@@ -40,6 +41,7 @@ It is built for video editors and creators who need audio and footage quickly wh
 - **Stays up to date** — new app versions are offered in-app, and the extraction engine (yt-dlp) updates itself when YouTube changes
 - **Safe saving** — never overwrites a file with the same name (adds a number instead) and remembers your folder and format
 - **Feels like macOS** — System Settings–style layout, light and dark mode, full keyboard control, VoiceOver support
+- **Windows too** — version 0.1 for Windows 10 and 11 (see [below](#windows))
 
 ## Download and install
 
@@ -67,6 +69,17 @@ After that, Stow opens normally and installs new versions from inside the app.
 - To verify the download, compare `shasum -a 256 Stow-<version>.dmg` with the `.sha256` file attached to the release.
 
 </details>
+
+### Windows
+
+The Windows version is **0.1**. Pasting links, audio and video downloads, playlists, the queue, and completion notifications work as on Mac.
+Quick extract, the tray icon, and automatic updates come in the next version.
+
+- **Requirements**: Windows 10 (22H2) or 11, on a regular (x64) or ARM PC (Snapdragon and others)
+- **Install**: Download `Stow-win-x64-Setup.exe` (ARM PCs: `Stow-win-arm64-Setup.exe`) from the [Windows release](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0) and run it.
+  It isn't code-signed yet, so if "Windows protected your PC" appears, click **More info → Run anyway**.
+  It installs to your account without admin rights and adds Stow to the Start menu. Uninstall it from Settings → Apps.
+- To use it without installing, unzip `Stow-win-x64-Portable.zip` and run `Stow.exe`.
 
 ## Usage
 
@@ -188,7 +201,7 @@ Stow bundles and runs the following open-source software. Their licenses are sho
 | [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | Global shortcut for quick extract | MIT |
 
 No GPL components are included. FFmpeg and LAME are built as LGPL without any GPL options, and the exact source archives
-(`ffmpeg-<version>.tar.xz`, `lame-<version>.tar.gz`) are attached to every [release](https://github.com/choitjddn0311/stow/releases) next to the DMG.
+(`ffmpeg-<version>.tar.xz`, `lame-<version>.tar.gz`) are attached to every [release](https://github.com/choitjddn0311/stow/releases) next to the DMG and the Windows installers.
 The build steps are in [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh) of the same version.
 
 ## Build from source

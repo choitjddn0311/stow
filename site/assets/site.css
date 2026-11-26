@@ -67,8 +67,9 @@ nav .links a:hover { color: var(--fg); }
 .hero .icon { width: 112px; margin: 0 auto 18px; }
 .hero h1 { font-size: 64px; line-height: 1.05; letter-spacing: -0.03em; font-weight: 700; margin: 0; text-wrap: balance; }
 .hero .lead { font-size: 22px; line-height: 1.45; color: var(--muted); max-width: 30em; margin: 18px auto 0; text-wrap: balance; }
-.cta { display: flex; gap: 22px; justify-content: center; align-items: center; margin-top: 28px; flex-wrap: wrap; }
+.cta { display: flex; gap: 12px 18px; justify-content: center; align-items: center; margin-top: 28px; flex-wrap: wrap; }
 .btn { background: var(--btn); color: var(--btn-fg); text-decoration: none; padding: 12px 24px; border-radius: 999px; font-size: 17px; font-weight: 500; border: 0; cursor: pointer; font-family: inherit; }
+.btn.alt { background: transparent; color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
 .tlink { color: var(--link); text-decoration: none; font-size: 17px; }
 .req { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
 .hero .shot { margin: 48px auto 0; width: 100%; max-width: 640px; }
@@ -143,6 +144,8 @@ kbd { font-family: inherit; border: 1px solid var(--line); border-radius: 6px; p
 .install { border-top: 1px solid var(--line); padding-block: 72px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 56px; }
 .install ol { margin: 0; padding-left: 1.3em; display: grid; gap: 12px; color: var(--muted); line-height: 1.6; }
 .install ol b { color: var(--fg); font-weight: 600; }
+.install .steps h3 { font-size: 15px; margin: 0 0 8px; }
+.install .steps ol + h3 { margin-top: 20px; }
 
 .end { text-align: center; padding-block: 72px 56px; border-top: 1px solid var(--line); }
 .end h2 { font-size: 44px; }

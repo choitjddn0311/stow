@@ -4,16 +4,17 @@
 
 # Stow
 
-**유튜브 링크를 붙여 넣으면 오디오(MP3·WAV·FLAC)나 영상(MP4)으로 저장하는 macOS 앱**
+**유튜브 링크를 붙여 넣으면 오디오(MP3·WAV·FLAC)나 영상(MP4)으로 저장하는 Mac·Windows 앱**
 
-광고도, 회원가입도, 수시로 바뀌는 다운로드 사이트도 없이 내 Mac에서 바로 받습니다.
+광고도, 회원가입도, 수시로 바뀌는 다운로드 사이트도 없이 내 컴퓨터에서 바로 받습니다.
 
 [![최신 버전](https://img.shields.io/github/v/release/choitjddn0311/stow?label=%EC%B5%9C%EC%8B%A0%20%EB%B2%84%EC%A0%84&color=12907F)](https://github.com/choitjddn0311/stow/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555?logo=apple)](#필요-환경)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2B-555)](#필요-환경)
+[![Windows 10·11](https://img.shields.io/badge/Windows-10%C2%B711%20(0.1)-555)](#windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[**다운로드**](https://github.com/choitjddn0311/stow/releases/latest) · [웹사이트](https://choitjddn0311.github.io/stow/) · [사용법](#사용법) · [자주 묻는 질문](#자주-묻는-질문) · [English](README.en.md)
+[**Mac 다운로드**](https://github.com/choitjddn0311/stow/releases/latest) · [**Windows 다운로드**](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0) · [웹사이트](https://choitjddn0311.github.io/stow/) · [사용법](#사용법) · [자주 묻는 질문](#자주-묻는-질문) · [English](README.en.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">
@@ -38,6 +39,7 @@ Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣�
 - **알아서 최신 상태 유지** — 앱 새 버전을 알려 주고, 추출 엔진(yt-dlp)은 유튜브가 바뀌어도 자동으로 업데이트합니다
 - **안전한 저장** — 같은 이름의 파일이 있으면 덮어쓰지 않고 번호를 붙입니다. 저장 위치와 포맷을 기억합니다
 - **macOS다운 화면** — 시스템 설정과 같은 모양, 라이트·다크 모드, 키보드만으로 조작, VoiceOver 지원
+- **Windows도 지원** — Windows 10·11용 0.1 버전([아래](#windows) 참고)
 
 ## 다운로드와 설치
 
@@ -65,6 +67,17 @@ Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣�
 - 받은 파일이 맞는지는 릴리스에 함께 올린 `.sha256`과 `shasum -a 256 Stow-<버전>.dmg` 결과를 비교해 확인할 수 있습니다.
 
 </details>
+
+### Windows
+
+Windows판은 **0.1 버전**입니다. 주소 붙여 넣기, 오디오·영상 받기, 재생목록, 대기열, 완료 알림은 Mac과 같고,
+빠른 추출 패널·트레이·자동 업데이트는 다음 버전에 들어갑니다.
+
+- **필요 환경**: Windows 10(22H2) 또는 11, 일반 PC(x64)나 ARM PC(Snapdragon 등)
+- **설치**: [Windows 릴리스](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0)에서 `Stow-win-x64-Setup.exe`(ARM PC는 `Stow-win-arm64-Setup.exe`)를 받아 실행합니다.
+  아직 코드 서명 전이라 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다.
+  관리자 권한 없이 내 계정에 설치되고 시작 메뉴에 Stow가 생깁니다. 제거는 설정 → 앱에서 합니다.
+- 설치 없이 쓰려면 `Stow-win-x64-Portable.zip`을 풀어 `Stow.exe`를 실행합니다.
 
 ## 사용법
 
@@ -188,7 +201,7 @@ Stow는 아래 오픈소스 프로그램을 앱 안에 함께 넣어 실행합�
 
 GPL 구성 요소는 넣지 않습니다. FFmpeg와 LAME은 GPL 구성 없이 LGPL로 직접 빌드했고,
 앱에 들어 있는 버전의 원본 소스(`ffmpeg-<버전>.tar.xz`, `lame-<버전>.tar.gz`)는 각 버전의
-[릴리스](https://github.com/choitjddn0311/stow/releases) Assets에 DMG와 함께 올려 두었습니다.
+[릴리스](https://github.com/choitjddn0311/stow/releases) Assets에 DMG·Windows 설치 파일과 함께 올려 두었습니다.
 빌드 방법은 같은 버전 소스 코드의 [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh)에 있습니다.
 
 ## 직접 빌드하기
