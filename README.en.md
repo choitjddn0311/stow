@@ -11,10 +11,10 @@ No ads, no sign-ups, no shady download sites that change their address every wee
 [![Latest release](https://img.shields.io/github/v/release/choitjddn0311/stow?label=release&color=12907F)](https://github.com/choitjddn0311/stow/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555?logo=apple)](#requirements)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2B-555)](#requirements)
-[![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11%20(0.1)-555)](#windows)
+[![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11%20(0.2)-555)](#windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[**Download for Mac**](https://github.com/choitjddn0311/stow/releases/latest) · [**Download for Windows**](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0) · [Website](https://choitjddn0311.github.io/stow/en/) · [Usage](#usage) · [FAQ](#faq) · [한국어](README.md)
+[**Download for Mac**](https://github.com/choitjddn0311/stow/releases/latest) · [**Download for Windows**](https://github.com/choitjddn0311/stow/releases/tag/win-v0.2.0) · [Website](https://choitjddn0311.github.io/stow/en/) · [Usage](#usage) · [FAQ](#faq) · [한국어](README.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">
@@ -37,11 +37,11 @@ It is built for video editors and creators who need audio and footage quickly wh
 - **Your format, your quality** — MP3 (128/192/320 kbps), WAV, FLAC, with title and artist metadata embedded
 - **Video, too** — save as editor-friendly MP4 (up to 1080p) or best quality (up to 4K), without re-encoding
 - **Queue and playlists** — add as many videos as you like; pick only the videos you want from a playlist
-- **Quick extract from anywhere** — press ⌥⌘Y in any app to open a small panel that picks up the link on your clipboard
+- **Quick extract from anywhere** — press ⌥⌘Y (Ctrl+Alt+Y on Windows) in any app to open a small panel that picks up the link on your clipboard
 - **Stays up to date** — new app versions are offered in-app, and the extraction engine (yt-dlp) updates itself when YouTube changes
 - **Safe saving** — never overwrites a file with the same name (adds a number instead) and remembers your folder and format
 - **Feels like macOS** — System Settings–style layout, light and dark mode, full keyboard control, VoiceOver support
-- **Windows too** — version 0.1 for Windows 10 and 11 (see [below](#windows))
+- **Windows too** — version 0.2 for Windows 10 and 11 (see [below](#windows))
 
 ## Download and install
 
@@ -72,11 +72,11 @@ After that, Stow opens normally and installs new versions from inside the app.
 
 ### Windows
 
-The Windows version is **0.1**. Pasting links, audio and video downloads, playlists, the queue, and completion notifications work as on Mac.
-Quick extract, the tray icon, and automatic updates come in the next version.
+The Windows version is **0.2** and has the same features as the Mac app: pasting links, audio and video downloads, playlists, the queue,
+completion notifications, quick extract (**Ctrl+Alt+Y**), and automatic app and engine updates. Stow stays in the tray when you close the window, so the shortcut keeps working.
 
 - **Requirements**: Windows 10 (22H2) or 11, on a regular (x64) or ARM PC (Snapdragon and others)
-- **Install**: Download `Stow-win-x64-Setup.exe` (ARM PCs: `Stow-win-arm64-Setup.exe`) from the [Windows release](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0) and run it.
+- **Install**: Download `Stow-win-x64-Setup.exe` (ARM PCs: `Stow-win-arm64-Setup.exe`) from the [Windows release](https://github.com/choitjddn0311/stow/releases/tag/win-v0.2.0) and run it.
   It isn't code-signed yet, so if "Windows protected your PC" appears, click **More info → Run anyway**.
   It installs to your account without admin rights and adds Stow to the Start menu. Uninstall it from Settings → Apps.
 - To use it without installing, unzip `Stow-win-x64-Portable.zip` and run `Stow.exe`.
@@ -117,7 +117,7 @@ they are saved into a folder named after the playlist. Private and deleted video
 
 ### Quick extract from any app
 
-Press **⌥⌘Y** (changeable in Settings) in any app to open a small panel.
+Press **⌥⌘Y** (**Ctrl+Alt+Y** on Windows; changeable in Settings) in any app to open a small panel.
 If your clipboard holds a YouTube link, Stow fills it in and loads it; press **Return** to add it to the queue and close the panel.
 The switch at the far left of the bottom row picks audio or video, and the chips next to it change the format and save folder (up to 5 recent folders) on the spot.
 
