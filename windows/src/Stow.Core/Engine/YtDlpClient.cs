@@ -1,9 +1,10 @@
+using Stow.Core.Features;
 using Stow.Core.Models;
 
 namespace Stow.Core.Engine;
 
 /// <summary>yt-dlp로 영상 정보를 조회하고 오디오를 추출하거나 영상을 받는다(Mac 앱 YtDlpClient와 같은 흐름).</summary>
-public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = null)
+public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = null) : IExtractEngine
 {
     private readonly ProcessRunner runner = runner ?? new ProcessRunner();
 
@@ -91,6 +92,23 @@ public sealed class YtDlpClient(EngineLocator engine, ProcessRunner? runner = nu
         {
             throw new EngineException(EngineErrorKind.PermissionDenied, error.Message, error);
         }
+    }
+
+    /// <summary>
+    /// 앱이 추출 중에 비정상 종료되어 남은 작업 폴더(<c>stow-…</c>)를 지운다. 지금 실행 중인 다른 Stow의 폴더를
+    /// 지우지 않도록 오래된 것만 지운다. 실패는 무시한다(다음 실행 때 다시 시도).
+    /// </summary>
+    public static void CleanStaleWorkDirectories(string root, TimeSpan olderThan)
+    {
+        try
+        {
+            foreach (var directory in new DirectoryInfo(root).EnumerateDirectories("stow-*"))
+            {
+                if (DateTime.UtcNow - directory.LastWriteTimeUtc < olderThan) continue;
+                try { directory.Delete(recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 
     private async Task<ProcessResult> RunAsync(ProcessCommand command, Action<OutputLine>? onLine, CancellationToken cancellationToken)
