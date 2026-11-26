@@ -11,10 +11,10 @@
 [![최신 버전](https://img.shields.io/github/v/release/choitjddn0311/stow?label=%EC%B5%9C%EC%8B%A0%20%EB%B2%84%EC%A0%84&color=12907F)](https://github.com/choitjddn0311/stow/releases/latest)
 [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-555?logo=apple)](#필요-환경)
 [![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%2B-555)](#필요-환경)
-[![Windows 10·11](https://img.shields.io/badge/Windows-10%C2%B711%20(0.1)-555)](#windows)
+[![Windows 10·11](https://img.shields.io/badge/Windows-10%C2%B711%20(0.2)-555)](#windows)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[**Mac 다운로드**](https://github.com/choitjddn0311/stow/releases/latest) · [**Windows 다운로드**](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0) · [웹사이트](https://choitjddn0311.github.io/stow/) · [사용법](#사용법) · [자주 묻는 질문](#자주-묻는-질문) · [English](README.en.md)
+[**Mac 다운로드**](https://github.com/choitjddn0311/stow/releases/latest) · [**Windows 다운로드**](https://github.com/choitjddn0311/stow/releases/tag/win-v0.2.0) · [웹사이트](https://choitjddn0311.github.io/stow/) · [사용법](#사용법) · [자주 묻는 질문](#자주-묻는-질문) · [English](README.en.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.png">
@@ -35,11 +35,11 @@ Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣�
 - **원하는 포맷과 음질** — MP3(128/192/320kbps), WAV, FLAC. 제목·아티스트 같은 메타데이터를 함께 넣습니다
 - **영상도 그대로** — 편집 프로그램에서 바로 열리는 MP4(1080p까지)나 최고 화질(4K까지)로 받습니다. 다시 인코딩하지 않아 화질이 떨어지지 않습니다
 - **대기열과 재생목록** — 여러 영상을 넣으면 차례로 추출하고, 재생목록은 원하는 영상만 골라 한 번에 담습니다
-- **어디서든 빠른 추출** — 단축키 ⌥⌘Y로 어느 앱에서든 작은 패널을 열고, 클립보드의 주소를 바로 불러옵니다
+- **어디서든 빠른 추출** — 단축키 ⌥⌘Y(Windows는 Ctrl+Alt+Y)로 어느 앱에서든 작은 패널을 열고, 클립보드의 주소를 바로 불러옵니다
 - **알아서 최신 상태 유지** — 앱 새 버전을 알려 주고, 추출 엔진(yt-dlp)은 유튜브가 바뀌어도 자동으로 업데이트합니다
 - **안전한 저장** — 같은 이름의 파일이 있으면 덮어쓰지 않고 번호를 붙입니다. 저장 위치와 포맷을 기억합니다
 - **macOS다운 화면** — 시스템 설정과 같은 모양, 라이트·다크 모드, 키보드만으로 조작, VoiceOver 지원
-- **Windows도 지원** — Windows 10·11용 0.1 버전([아래](#windows) 참고)
+- **Windows도 지원** — Windows 10·11용 0.2 버전([아래](#windows) 참고)
 
 ## 다운로드와 설치
 
@@ -70,11 +70,11 @@ Stow는 웹사이트에 의존하지 않는 Mac 앱이라 링크만 붙여 넣�
 
 ### Windows
 
-Windows판은 **0.1 버전**입니다. 주소 붙여 넣기, 오디오·영상 받기, 재생목록, 대기열, 완료 알림은 Mac과 같고,
-빠른 추출 패널·트레이·자동 업데이트는 다음 버전에 들어갑니다.
+Windows판은 **0.2 버전**입니다. 주소 붙여 넣기, 오디오·영상 받기, 재생목록, 대기열, 완료 알림, 빠른 추출(**Ctrl+Alt+Y**),
+앱·추출 엔진 자동 업데이트까지 Mac과 같은 기능을 씁니다. 창을 닫아도 트레이에 남아 단축키가 동작합니다.
 
 - **필요 환경**: Windows 10(22H2) 또는 11, 일반 PC(x64)나 ARM PC(Snapdragon 등)
-- **설치**: [Windows 릴리스](https://github.com/choitjddn0311/stow/releases/tag/win-v0.1.0)에서 `Stow-win-x64-Setup.exe`(ARM PC는 `Stow-win-arm64-Setup.exe`)를 받아 실행합니다.
+- **설치**: [Windows 릴리스](https://github.com/choitjddn0311/stow/releases/tag/win-v0.2.0)에서 `Stow-win-x64-Setup.exe`(ARM PC는 `Stow-win-arm64-Setup.exe`)를 받아 실행합니다.
   아직 코드 서명 전이라 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다.
   관리자 권한 없이 내 계정에 설치되고 시작 메뉴에 Stow가 생깁니다. 제거는 설정 → 앱에서 합니다.
 - 설치 없이 쓰려면 `Stow-win-x64-Portable.zip`을 풀어 `Stow.exe`를 실행합니다.
@@ -115,7 +115,7 @@ Windows판은 **0.1 버전**입니다. 주소 붙여 넣기, 오디오·영상 �
 
 ### 어느 앱에서든 빠른 추출
 
-어느 앱에서든 **⌥⌘Y**(설정에서 변경)를 누르면 작은 패널이 뜹니다.
+어느 앱에서든 **⌥⌘Y**(Windows는 **Ctrl+Alt+Y**, 설정에서 변경)를 누르면 작은 패널이 뜹니다.
 클립보드에 유튜브 주소가 있으면 자동으로 채워 불러오고, **Return**을 누르면 지금 설정으로 대기열에 넣고 패널이 닫힙니다.
 
 <picture>
