@@ -24,11 +24,11 @@ public static partial class Program
             .Run();
         XamlCheckProcessRequirements();
         WinRT.ComWrappersSupport.InitializeComWrappers();
-        Application.Start(_ =>
+        Application.Start(callbackParams =>
         {
             var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
             SynchronizationContext.SetSynchronizationContext(context);
-            _ = new App();
+            new App();
         });
     }
 
