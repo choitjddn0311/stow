@@ -70,9 +70,17 @@
             </VisualStateGroup>
         </VisualStateManager.VisualStateGroups>
 
-        <!-- 엔진 파일이 없을 때(다시 설치 안내) -->
-        <InfoBar x:Name="EngineInfoBar" Grid.ColumnSpan="2" Margin="20,12,20,0" Severity="Error" IsClosable="False"
-                 Title="추출 엔진을 찾을 수 없습니다" />
+        <StackPanel Grid.ColumnSpan="2">
+            <!-- 엔진 파일이 없을 때(다시 설치 안내) -->
+            <InfoBar x:Name="EngineInfoBar" Margin="20,12,20,0" Severity="Error" IsClosable="False"
+                     Title="추출 엔진을 찾을 수 없습니다" />
+            <!-- 앱 업데이트를 받아 두었을 때. 닫으면(나중에) 종료할 때 설치된다. -->
+            <InfoBar x:Name="UpdateInfoBar" Margin="20,12,20,0" Severity="Informational" IsClosable="True">
+                <InfoBar.ActionButton>
+                    <Button Content="다시 시작해 설치" Click="OnRestartToUpdate" Style="{StaticResource AccentButtonStyle}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
 
         <!-- 왼쪽: 주소 · 영상 정보 · 출력 -->
         <ScrollViewer x:Name="LeftPane" Grid.Row="1" Grid.Column="0" Padding="20,0,20,16" VerticalScrollBarVisibility="Auto">
@@ -290,6 +298,42 @@
                         </StackPanel>
                         <ToggleSwitch x:Name="StartupSwitch" Grid.Column="2" MinWidth="0" OnContent="켬" OffContent="끔"
                                       AutomationProperties.Name="Windows를 시작할 때 실행" Toggled="OnStartupToggled" />
+                    </Grid>
+                </Border>
+
+                <TextBlock Text="업데이트" Style="{StaticResource SectionStyle}" />
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE895;" Style="{StaticResource CardIconStyle}" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Name="AppVersionText" />
+                            <TextBlock x:Name="AppUpdateStatus" Style="{StaticResource CardDescriptionStyle}" />
+                        </StackPanel>
+                        <Button x:Name="AppUpdateButton" Grid.Column="2" Click="OnAppUpdateButton" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource CardStyle}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE9F5;" Style="{StaticResource CardIconStyle}" Margin="0,0,8,0" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Name="EngineVersionText" />
+                            <TextBlock x:Name="EngineUpdateStatus" Style="{StaticResource CardDescriptionStyle}"
+                                       Text="유튜브가 바뀌어 추출이 안 될 때를 대비해 하루에 한 번 새 엔진을 확인해 받습니다." />
+                            <HyperlinkButton x:Name="RevertEngineButton" Content="앱에 들어 있는 엔진으로 되돌리기" Padding="0,4,0,0"
+                                             Click="OnRevertEngine" Visibility="Collapsed" />
+                        </StackPanel>
+                        <Button x:Name="EngineUpdateButton" Grid.Column="2" Content="확인" Click="OnCheckEngine"
+                                AutomationProperties.Name="엔진 업데이트 확인" />
                     </Grid>
                 </Border>
             </StackPanel>

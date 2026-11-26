@@ -9,4 +9,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Stow.Core.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 앱 업데이트 소스(Windows 릴리스만 고르기)를 테스트할 수 있게 Core에 둔다. 앱·CI의 vpk와 같은 버전. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
 </Project>

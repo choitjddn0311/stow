@@ -1,7 +1,7 @@
 <Project>
   <!-- 모든 Windows 프로젝트 공통 설정. 버전은 여기 한 곳에서 올린다. -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>Stow</Product>
     <Company>choitjddn0311</Company>
     <Copyright>© choitjddn0311. MIT License.</Copyright>
