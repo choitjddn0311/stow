@@ -52,6 +52,21 @@ internal sealed partial class WindowsNotifier : ICompletionNotifier
         }
     }
 
+    /// <summary>안내 알림(누르면 아무것도 하지 않는다). 예: 트레이에서 계속 실행 중. 띄웠으면 true.</summary>
+    public bool NotifyInfo(string title, string body)
+    {
+        if (!registered) return false;
+        try
+        {
+            AppNotificationManager.Default.Show(new AppNotificationBuilder().AddText(title).AddText(body).BuildNotification());
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     /// <summary>탐색기를 열어 파일을 선택한다(셸 API로 직접 열어 명령줄 문자열을 만들지 않는다).</summary>
     public void Reveal(string file)
     {

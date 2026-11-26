@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -21,7 +20,8 @@ public sealed partial class MainWindow : Window
     private const int InitialWidth = 1040;
     private const int InitialHeight = 760;
 
-    private readonly EngineLocator engine = EngineLocator.Bundled();
+    private readonly EngineLocator engine;
+    private readonly HotKeyController hotKeys;
     /// <summary>코드에서 컨트롤 값을 맞추는 동안 바뀜 이벤트를 무시한다.</summary>
     private bool updatingControls;
     /// <summary>컨트롤 다시 만들기를 한 번으로 모은다(설정 하나를 바꿔도 알림이 여러 개 온다).</summary>
@@ -31,12 +31,18 @@ public sealed partial class MainWindow : Window
 
     public ExtractViewModel ViewModel { get; }
 
-    internal MainWindow(WindowsNotifier notifier)
+    /// <summary>트레이 메뉴 "종료"처럼 정말 닫을 때 true(아니면 설정에 따라 트레이로 숨긴다).</summary>
+    internal bool AllowClose { get; set; }
+
+    /// <summary>창을 닫아 트레이로 숨겼다.</summary>
+    internal event Action? HiddenToTray;
+
+    internal MainWindow(ExtractViewModel viewModel, EngineLocator engine, HotKeyController hotKeys)
     {
-        var dataDirectory = AppInfo.DataDirectory(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
-        var settings = new AppSettings(new JsonFileSettingsStore(Path.Combine(dataDirectory, "settings.json")));
-        var client = new YtDlpClient(engine);
-        ViewModel = new ExtractViewModel(settings, client, new ExtractQueue(client, notifier));
+        ViewModel = viewModel;
+        this.engine = engine;
+        this.hotKeys = hotKeys;
+        var settings = viewModel.Settings;
 
         InitializeComponent();
         var informational = typeof(MainWindow).Assembly
@@ -46,7 +52,7 @@ public sealed partial class MainWindow : Window
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "Stow.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
         ApplyBackdrop();
-        var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
+        var scale = NativeMethods.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)Math.Round(InitialWidth * scale), (int)Math.Round(InitialHeight * scale)));
 
         var missing = engine.MissingComponents();
@@ -62,6 +68,9 @@ public sealed partial class MainWindow : Window
             }
         };
         UpdateOutputControls();
+        hotKeys.Changed += UpdateHotKeyCard;
+        UpdateHotKeyCard();
+        StartupSwitch.IsOn = SafeStartupEnabled();
         RootGrid.Loaded += OnLoaded;
         AppWindow.Closing += OnClosing;
     }
@@ -83,7 +92,7 @@ public sealed partial class MainWindow : Window
         RootGrid.Loaded -= OnLoaded;
         if (ViewModel.Settings.AcceptedNoticeVersion < UsageNotice.Version && !await ShowUsageNoticeAsync())
         {
-            Application.Current.Exit();
+            ((App)Application.Current).Shutdown();
             return;
         }
         UrlBox.Focus(FocusState.Programmatic);
@@ -114,6 +123,14 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async void OnClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
     {
+        // 트레이에 남기: 창만 숨기고 받기는 계속한다(이용 고지에 동의하기 전에는 그냥 끝낸다).
+        if (!AllowClose && ViewModel.Settings.KeepRunningInTray && ViewModel.Settings.AcceptedNoticeVersion >= UsageNotice.Version)
+        {
+            args.Cancel = true;
+            AppWindow.Hide();
+            HiddenToTray?.Invoke();
+            return;
+        }
         if (closing || !ViewModel.Queue.IsRunning) return;
         args.Cancel = true;
         closing = true;
@@ -192,11 +209,11 @@ public sealed partial class MainWindow : Window
                 QualityIcon.Glyph = "";
                 QualityDescription.Text = "";
                 QualityBox.Visibility = Visibility.Visible;
-                foreach (var bitrate in new[] { Mp3Bitrate.Kbps320, Mp3Bitrate.Kbps192, Mp3Bitrate.Kbps128 })
+                foreach (var bitrate in FormatChoices.Mp3Bitrates)
                 {
                     QualityBox.Items.Add(new ComboBoxItem { Content = $"{(int)bitrate} kbps", Tag = bitrate });
                 }
-                QualityBox.SelectedIndex = settings.Mp3Bitrate switch { Mp3Bitrate.Kbps192 => 1, Mp3Bitrate.Kbps128 => 2, _ => 0 };
+                QualityBox.SelectedIndex = FormatChoices.Mp3Bitrates.ToList().IndexOf(settings.Mp3Bitrate);
             }
             else
             {
@@ -289,6 +306,119 @@ public sealed partial class MainWindow : Window
     private void OnCancelItem(object sender, RoutedEventArgs e) => ViewModel.Queue.Cancel(ItemOf(sender));
     private void OnRemoveItem(object sender, RoutedEventArgs e) => ViewModel.Queue.Remove(ItemOf(sender));
 
+    // MARK: 빠른 추출 설정
+
+    private void UpdateHotKeyCard()
+    {
+        HotKeyKeys.ItemsSource = ViewModel.Settings.QuickExtractHotKey.Parts;
+        HotKeyDescription.Text = hotKeys.IsActive
+            ? "어느 앱에서든 이 키를 누르면 빠른 추출 창이 열립니다."
+            : "다른 앱이 이미 쓰고 있어 동작하지 않습니다. 다른 키로 바꿔 주세요.";
+    }
+
+    /// <summary>"변경": 새 단축키를 눌러 입력받는다(입력받는 동안 지금 단축키는 잠시 끈다).</summary>
+    private async void OnChangeHotKey(object sender, RoutedEventArgs e)
+    {
+        HotKey? captured = null;
+        var keys = new TextBlock { Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"], Text = "…" };
+        var status = new TextBlock
+        {
+            Text = "Ctrl·Alt·Win 중 하나 이상과 글자·숫자·F 키를 함께 누르세요.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = RootGrid.XamlRoot,
+            Title = "빠른 추출 단축키",
+            Content = new StackPanel { Spacing = 12, MinWidth = 320, Children = { keys, status } },
+            PrimaryButtonText = "저장",
+            SecondaryButtonText = $"기본값({HotKey.Default})",
+            CloseButtonText = "취소",
+            DefaultButton = ContentDialogButton.Primary,
+            IsPrimaryButtonEnabled = false,
+        };
+        void Show(HotKey hotKey)
+        {
+            captured = hotKey;
+            keys.Text = hotKey.ToString();
+            dialog.IsPrimaryButtonEnabled = hotKey.IsValid;
+        }
+        dialog.PreviewKeyDown += (_, args) =>
+        {
+            // Esc·Tab·Enter는 대화 상자 조작에 쓴다.
+            if (args.Key is VirtualKey.Escape or VirtualKey.Tab or VirtualKey.Enter) return;
+            args.Handled = true;
+            var modifiers = CurrentModifiers();
+            var key = (int)args.Key;
+            if (HotKey.KeyName(key) is null)
+            {
+                // 보조 키만 누른 동안: "Ctrl+Alt+…"
+                var partial = string.Join("+", new HotKey(modifiers, 0).Parts.SkipLast(1));
+                keys.Text = partial.Length > 0 ? partial + "+…" : "…";
+                return;
+            }
+            Show(new HotKey(modifiers, key));
+            status.Text = captured!.Value.IsValid
+                ? "저장을 누르면 바로 바뀝니다."
+                : "Ctrl·Alt·Win 중 하나 이상을 함께 눌러야 합니다.";
+        };
+        dialog.SecondaryButtonClick += (_, args) =>
+        {
+            args.Cancel = true;
+            Show(HotKey.Default);
+            status.Text = "저장을 누르면 기본값으로 바뀝니다.";
+        };
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            if (captured is { } hotKey && hotKeys.TryChange(hotKey)) return;
+            args.Cancel = true;
+            status.Text = "다른 앱이 이미 쓰는 단축키입니다. 다른 키를 눌러 주세요.";
+            hotKeys.Suspend();
+        };
+        hotKeys.Suspend();
+        try
+        {
+            await dialog.ShowAsync();
+        }
+        finally
+        {
+            hotKeys.Apply();
+        }
+    }
+
+    private static HotKeyModifiers CurrentModifiers()
+    {
+        static bool Down(VirtualKey key) =>
+            Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        var modifiers = HotKeyModifiers.None;
+        if (Down(VirtualKey.Control)) modifiers |= HotKeyModifiers.Control;
+        if (Down(VirtualKey.Menu)) modifiers |= HotKeyModifiers.Alt;
+        if (Down(VirtualKey.Shift)) modifiers |= HotKeyModifiers.Shift;
+        if (Down(VirtualKey.LeftWindows) || Down(VirtualKey.RightWindows)) modifiers |= HotKeyModifiers.Windows;
+        return modifiers;
+    }
+
+    private static bool SafeStartupEnabled()
+    {
+        try { return StartupRegistration.IsEnabled; } catch (Exception) { return false; }
+    }
+
+    private void OnStartupToggled(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (StartupSwitch.IsOn != StartupRegistration.IsEnabled) StartupRegistration.SetEnabled(StartupSwitch.IsOn);
+        }
+        catch (Exception)
+        {
+            StartupSwitch.IsOn = SafeStartupEnabled();
+        }
+    }
+
+    /// <summary>트레이·다른 실행에서 창을 보일 때 다른 앱 위로 가져온다.</summary>
+    internal void BringToFront() => NativeMethods.SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+
     // MARK: 창
 
     /// <summary>Windows 11은 Mica, Mica를 쓸 수 없는 Windows 10은 테마에 맞는 단색 배경.</summary>
@@ -298,6 +428,4 @@ public sealed partial class MainWindow : Window
         else RootGrid.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
     }
 
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
 }

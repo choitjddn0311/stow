@@ -20,6 +20,10 @@ public sealed class SettingsData
     public int? Mp4Resolution { get; set; }
     public int? BestResolution { get; set; }
     public int AcceptedNoticeVersion { get; set; }
+    public List<string>? RecentOutputDirectories { get; set; }
+    public string? QuickExtractHotKey { get; set; }
+    public bool? KeepRunningInTray { get; set; }
+    public bool TrayNoticeShown { get; set; }
 }
 
 public interface ISettingsStore
@@ -28,7 +32,7 @@ public interface ISettingsStore
     void Save(SettingsData data);
 }
 
-/// <summary><c>%LOCALAPPDATA%\Stow\settings.json</c>에 저장한다. 임시 파일에 쓴 뒤 바꿔 넣어 반쯤 쓴 파일이 남지 않게 한다.</summary>
+/// <summary><c>%APPDATA%\Stow\settings.json</c>에 저장한다. 임시 파일에 쓴 뒤 바꿔 넣어 반쯤 쓴 파일이 남지 않게 한다.</summary>
 public sealed class JsonFileSettingsStore(string path) : ISettingsStore
 {
     private static readonly JsonSerializerOptions Options = new()
@@ -77,7 +81,11 @@ public sealed class AppSettings : ObservableObject
         this.store = store;
         data = store.Load() ?? new SettingsData();
         outputDirectory = data.OutputDirectory ?? defaultOutputDirectory ?? DefaultOutputDirectory;
+        recentOutputDirectories = Recents(outputDirectory, data.RecentOutputDirectories ?? []);
     }
+
+    /// <summary>빠른 추출 폴더 메뉴에 보일 최근 폴더 수</summary>
+    public const int MaxRecentOutputDirectories = 5;
 
     /// <summary>기본 저장 위치: 사용자 폴더의 "다운로드".</summary>
     public static string DefaultOutputDirectory =>
@@ -89,8 +97,45 @@ public sealed class AppSettings : ObservableObject
         get => outputDirectory;
         set
         {
-            if (Set(ref outputDirectory, value)) { data.OutputDirectory = value; Save(); }
+            // 같은 폴더(대소문자·끝 구분자만 다름)를 다시 고르면 아무것도 하지 않는다.
+            if (SameDirectory(outputDirectory, value)) return;
+            if (Set(ref outputDirectory, value))
+            {
+                data.OutputDirectory = value;
+                recentOutputDirectories = Recents(value, recentOutputDirectories);
+                Save();
+                Notify(nameof(RecentOutputDirectories));
+            }
         }
+    }
+
+    private IReadOnlyList<string> recentOutputDirectories;
+    /// <summary>최근에 고른 저장 폴더(지금 폴더가 맨 앞, 최대 5개)</summary>
+    public IReadOnlyList<string> RecentOutputDirectories => recentOutputDirectories;
+
+    /// <summary>메뉴에 보일 최근 폴더: 지금 폴더와, 아직 있는 폴더만(지워졌거나 빠진 USB 등은 뺀다).</summary>
+    public IReadOnlyList<string> AvailableRecentOutputDirectories =>
+        recentOutputDirectories.Where(d => SameDirectory(d, outputDirectory) || Directory.Exists(d)).ToList();
+
+    /// <summary>빠른 추출 전역 단축키(기본 Ctrl+Alt+Y)</summary>
+    public HotKey QuickExtractHotKey
+    {
+        get => HotKey.Parse(data.QuickExtractHotKey) ?? HotKey.Default;
+        set => Change(() => data.QuickExtractHotKey = value.Serialize(), QuickExtractHotKey != value && value.IsValid, nameof(QuickExtractHotKey));
+    }
+
+    /// <summary>창을 닫아도 트레이에 남아 단축키가 동작한다(기본 켬).</summary>
+    public bool KeepRunningInTray
+    {
+        get => data.KeepRunningInTray ?? true;
+        set => Change(() => data.KeepRunningInTray = value, KeepRunningInTray != value, nameof(KeepRunningInTray));
+    }
+
+    /// <summary>"트레이에서 계속 실행 중" 안내를 이미 보였는지(처음 한 번만 알린다)</summary>
+    public bool TrayNoticeShown
+    {
+        get => data.TrayNoticeShown;
+        set => Change(() => data.TrayNoticeShown = value, TrayNoticeShown != value, nameof(TrayNoticeShown));
     }
 
     public MediaKind MediaKind
@@ -186,6 +231,23 @@ public sealed class AppSettings : ObservableObject
     private void Save()
     {
         data.OutputDirectory = outputDirectory;
+        data.RecentOutputDirectories = [.. recentOutputDirectories];
         store.Save(data);
+    }
+
+    /// <summary>Windows 경로는 대소문자를 구분하지 않고, 끝의 구분자는 무시한다.</summary>
+    public static bool SameDirectory(string a, string b) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(a), Path.TrimEndingDirectorySeparator(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary><paramref name="directory"/>를 맨 앞에 두고 같은 폴더는 한 번만, 최대 개수까지.</summary>
+    private static List<string> Recents(string directory, IEnumerable<string> list)
+    {
+        var result = new List<string> { directory };
+        foreach (var d in list)
+        {
+            if (result.Count >= MaxRecentOutputDirectories) break;
+            if (!string.IsNullOrWhiteSpace(d) && !result.Any(r => SameDirectory(r, d))) result.Add(d);
+        }
+        return result;
     }
 }
