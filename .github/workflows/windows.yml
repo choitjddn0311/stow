@@ -10,7 +10,13 @@ on:
       - windows/**
       - scripts/build-ffmpeg.sh   # Mac ffmpeg 구성과 같은지 확인한다
       - .github/workflows/windows.yml
+  # 수동 실행. release를 켜고 main에서 실행하면 설치 파일을 만들어 초안 릴리스(win-v<버전>)를 만든다.
   workflow_dispatch:
+    inputs:
+      release:
+        description: "설치 파일을 만들어 초안 릴리스로 올리기(main에서만)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -132,3 +138,102 @@ jobs:
           name: ${{ matrix.artifact }}
           path: windows/out/${{ matrix.rid }}
           retention-days: 14
+
+  # LGPL 구성 요소(FFmpeg·LAME) 원본 소스. Mac 릴리스와 같은 스크립트·같은 파일(체크섬 확인)
+  lgpl-sources:
+    if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/fetch-lgpl-sources.sh "$RUNNER_TEMP/sources"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lgpl-sources
+          path: ${{ runner.temp }}/sources
+          retention-days: 7
+
+  # 설치 파일(Velopack: 사용자 폴더에 설치, 관리자 권한 불필요)을 만들고 초안 릴리스를 만든다.
+  # Mac 앱의 자동 업데이트가 releases/latest를 읽으므로 Windows 릴리스는 "최신"으로 표시하지 않는다.
+  release:
+    needs: [windows-build, lgpl-sources]
+    if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: windows
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: windows/global.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Stow-windows-x64
+          path: windows/publish/win-x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: Stow-windows-arm64
+          path: windows/publish/win-arm64
+      - uses: actions/download-artifact@v4
+        with:
+          name: lgpl-sources
+          path: windows/releases
+
+      - name: Pack installers
+        run: |
+          $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          if (-not $version) { Write-Error "Directory.Build.props에서 버전을 읽지 못함"; exit 1 }
+          $tag = "win-v$version"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) { Write-Error "$tag 릴리스가 이미 있습니다. 버전을 올리세요."; exit 1 }
+          $notes = "../docs/release/notes/win-$version.md"
+          if (-not (Test-Path $notes)) { Write-Error "$notes 가 없습니다"; exit 1 }
+          dotnet tool install --global vpk --version 1.2.161
+          foreach ($rid in @('win-x64', 'win-arm64')) {
+            vpk pack --packId Stow --packVersion $version --packDir "publish/$rid" --mainExe Stow.exe `
+              --packTitle Stow --packAuthors choitjddn0311 --icon src/Stow.App/Assets/Stow.ico `
+              --runtime $rid --channel $rid --outputDir releases
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Get-ChildItem releases | ForEach-Object { "{0,12:N0}  {1}" -f $_.Length, $_.Name }
+          "version=$version" >> $env:GITHUB_ENV
+          "tag=$tag" >> $env:GITHUB_ENV
+
+      - name: Create draft release
+        run: |
+          $body = @"
+          ## Stow for Windows $env:version
+
+          $(Get-Content "../docs/release/notes/win-$env:version.md" -Raw)
+
+          Windows 10(22H2)·11, 일반 PC(x64)와 ARM PC(Snapdragon 등)를 지원합니다.
+
+          ### 설치
+          1. 아래 Assets에서 내 PC에 맞는 설치 파일을 받아 실행합니다.
+             - 일반 PC(Intel·AMD): ``Stow-win-x64-Setup.exe``
+             - ARM PC(Snapdragon 등): ``Stow-win-arm64-Setup.exe``
+          2. 아직 코드 서명 전이라 "Windows의 PC 보호" 창이 뜰 수 있습니다. **추가 정보 → 실행**을 누르세요.
+          3. 관리자 권한 없이 내 사용자 계정에 설치되고, 시작 메뉴에 Stow가 생깁니다.
+
+          설치 없이 쓰려면 ``Stow-win-x64-Portable.zip``(ARM PC는 ``-arm64``)을 풀어 ``Stow.exe``를 실행하세요.
+
+          본인이 저작권을 가지고 있거나 사용 허락을 받은 영상에만 사용하세요.
+
+          ### LGPL 소스
+          앱에 들어 있는 FFmpeg·LAME(LGPL)의 원본 소스는 아래 Assets의 ``ffmpeg-*.tar.xz``, ``lame-*.tar.gz``입니다. 빌드 방법은 이 버전 소스 코드의 ``windows/scripts/build-ffmpeg.sh``에 있습니다.
+          "@
+          $body = ($body -split "`n" | ForEach-Object { $_ -replace '^          ', '' }) -join "`n"
+          Set-Content -Path release-notes.md -Value $body -Encoding utf8
+          gh release create $env:tag (Get-ChildItem releases -File).FullName --draft --latest=false `
+            --target $env:GITHUB_SHA --title "Stow for Windows $env:version" --notes-file release-notes.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release view $env:tag --json url,isDraft,assets --jq '.url, .isDraft, (.assets[].name)'

@@ -43,6 +43,8 @@ public sealed partial class MainWindow : Window
             .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "0.0.0";
         Title = $"Stow {AppInfo.DisplayVersion(informational)}";
+        var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "Stow.ico");
+        if (File.Exists(icon)) AppWindow.SetIcon(icon);
         ApplyBackdrop();
         var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)Math.Round(InitialWidth * scale), (int)Math.Round(InitialHeight * scale)));

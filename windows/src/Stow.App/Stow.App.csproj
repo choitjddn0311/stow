@@ -14,6 +14,9 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
+    <ApplicationIcon>Assets\Stow.ico</ApplicationIcon>
+    <!-- Main을 직접 만든다(설치·업데이트 도구 Velopack이 가장 먼저 실행되어야 한다). Program.cs -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <!-- 설치 패키지가 없어도 화면 리소스 파일(Stow.pri, 컴파일된 XAML 포함)을 만들게 한다.
          없으면 첫 창을 불러오다 실패해 앱이 아무것도 띄우지 못하고 꺼진다. -->
     <EnableMsixTooling>true</EnableMsixTooling>
@@ -23,6 +26,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />
+    <!-- 설치·업데이트(MIT). CI의 vpk 도구와 같은 버전으로 맞춘다. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 창 아이콘(실행 파일 아이콘은 ApplicationIcon). PRI 색인에 넣지 않게 None으로 -->
+    <None Include="Assets\Stow.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Stow.Core\Stow.Core.csproj" />
