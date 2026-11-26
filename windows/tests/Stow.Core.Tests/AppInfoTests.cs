@@ -5,9 +5,9 @@ namespace Stow.Core.Tests;
 public class AppInfoTests
 {
     [Fact]
-    public void DataDirectoryIsUnderLocalAppData()
+    public void DataDirectoryIsUnderAppData()
     {
-        var root = Path.Combine("C:", "Users", "me", "AppData", "Local");
+        var root = Path.Combine("C:", "Users", "me", "AppData", "Roaming");
         Assert.Equal(Path.Combine(root, "Stow"), AppInfo.DataDirectory(root));
     }
 
