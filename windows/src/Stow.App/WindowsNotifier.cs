@@ -52,16 +52,18 @@ internal sealed partial class WindowsNotifier : ICompletionNotifier
         }
     }
 
-    /// <summary>안내 알림(누르면 아무것도 하지 않는다). 예: 트레이에서 계속 실행 중.</summary>
-    public void NotifyInfo(string title, string body)
+    /// <summary>안내 알림(누르면 아무것도 하지 않는다). 예: 트레이에서 계속 실행 중. 띄웠으면 true.</summary>
+    public bool NotifyInfo(string title, string body)
     {
-        if (!registered) return;
+        if (!registered) return false;
         try
         {
             AppNotificationManager.Default.Show(new AppNotificationBuilder().AddText(title).AddText(body).BuildNotification());
+            return true;
         }
         catch (Exception)
         {
+            return false;
         }
     }
 

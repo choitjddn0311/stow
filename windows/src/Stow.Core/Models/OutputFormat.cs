@@ -77,5 +77,18 @@ public abstract record OutputFormat
     };
 }
 
+/// <summary>화면에서 고를 수 있는 포맷 목록(메인 창과 빠른 추출 창이 함께 쓴다).</summary>
+public static class FormatChoices
+{
+    /// <summary>MP3 음질(높은 것부터)</summary>
+    public static IReadOnlyList<Mp3Bitrate> Mp3Bitrates { get; } = [Mp3Bitrate.Kbps320, Mp3Bitrate.Kbps192, Mp3Bitrate.Kbps128];
+
+    /// <summary>오디오 포맷 전부: MP3(음질별) · WAV · FLAC</summary>
+    public static IReadOnlyList<OutputFormat> Audio { get; } =
+        [.. Mp3Bitrates.Select(b => (OutputFormat)new OutputFormat.Mp3(b)), new OutputFormat.Wav(), new OutputFormat.Flac()];
+
+    public static IReadOnlyList<VideoFormat> VideoFormats { get; } = [VideoFormat.Mp4, VideoFormat.Best];
+}
+
 /// <summary>추출 옵션.</summary>
 public sealed record ExtractOptions(OutputFormat Format, string OutputDirectory);

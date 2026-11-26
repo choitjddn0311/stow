@@ -142,19 +142,49 @@ public class QuickExtractTests
     }
 
     [Fact]
-    public async Task OpenInMainWindowPassesAddress()
+    public async Task OpenInMainWindowPassesAddressAndLoadedPlaylist()
     {
-        var (model, _, _, _) = Make();
-        string? opened = null;
+        var (model, engine, queue, _) = Make();
+        var playlist = new Playlist("PL123", "목록", [new PlaylistEntry("aaaaaaaaaaa", "첫 곡", 10), new PlaylistEntry("bbbbbbbbbbb", "둘째", 20)], 2);
+        engine.Media = new FetchedMedia.OfPlaylist(playlist);
+        (string Url, Playlist? Playlist)? opened = null;
         var closed = 0;
-        model.OpenInMainWindowRequested += url => opened = url;
+        model.OpenInMainWindowRequested += (url, p) => opened = (url, p);
         model.CloseRequested += () => closed++;
         await model.PrepareForPresentationAsync();
         model.Extract.UrlText = "https://www.youtube.com/playlist?list=PL123";
+        model.Extract.Fetch();
+        await model.Extract.WaitForFetchAsync();
         model.OpenInMainWindow();
-        Assert.Equal("https://www.youtube.com/playlist?list=PL123", opened);
+        Assert.Equal("https://www.youtube.com/playlist?list=PL123", opened?.Url);
+        Assert.Same(playlist, opened?.Playlist);
         Assert.Equal(1, closed);
+
+        // 메인 창은 받은 목록을 그대로 보이고 다시 조회하지 않는다.
+        var main = new ExtractViewModel(model.Extract.Settings, engine, queue, TimeSpan.FromMilliseconds(10));
+        main.Open(opened!.Value.Url, opened.Value.Playlist);
+        Assert.Equal(ExtractStage.Playlist, main.Stage);
+        Assert.Equal("https://www.youtube.com/playlist?list=PL123", main.UrlText);
+        Assert.Equal(2, main.PendingAddCount);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.Equal(1, engine.FetchCount);
+
+        // 재생목록이 없으면 주소만 넣고 자동으로 불러온다.
+        main.Open("https://youtu.be/abcdefghijk", null);
+        Assert.Equal("https://youtu.be/abcdefghijk", main.UrlText);
     }
+
+    [Fact]
+    public void FormatChoicesListEveryFormat()
+    {
+        Assert.Equal([Mp3Bitrate.Kbps320, Mp3Bitrate.Kbps192, Mp3Bitrate.Kbps128], FormatChoices.Mp3Bitrates);
+        Assert.Equal(["MP3 320kbps", "MP3 192kbps", "MP3 128kbps", "WAV", "FLAC"], FormatChoices.Audio.Select(DisplayText.Name));
+        Assert.Equal([VideoFormat.Mp4, VideoFormat.Best], FormatChoices.VideoFormats);
+    }
+
+    [Fact]
+    public void ClipboardUrlRejectsTooLongText() =>
+        Assert.Null(ClipboardUrl.YouTubeText("https://youtu.be/abcdefghijk" + new string(' ', ClipboardUrl.MaxLength)));
 }
 
 public class HotKeyAndTraySettingsTests

@@ -215,6 +215,31 @@ public sealed class ExtractViewModel : ObservableObject
         StartOver();
     }
 
+    /// <summary>
+    /// 다른 곳(빠른 추출 창)에서 이미 불러온 재생목록을 그대로 보인다(다시 조회하지 않는다).
+    /// 재생목록이 없으면 주소만 넣는다(잠시 뒤 자동으로 불러온다).
+    /// </summary>
+    public void Open(string text, Playlist? loaded)
+    {
+        if (loaded is null)
+        {
+            UrlText = text;
+            return;
+        }
+        autoFetchCancel?.Cancel();
+        if (IsFetching)
+        {
+            var cancel = fetchCancel;
+            fetchCancel = null;
+            cancel?.Cancel();
+        }
+        // 불러온 주소로 먼저 정해 두면 주소란을 바꿔도 결과를 지우거나 다시 불러오지 않는다.
+        loadedUrlText = text;
+        UrlText = text;
+        ClearResult();
+        ShowPlaylist(loaded);
+    }
+
     /// <summary>오류 안내의 "다시 시도".</summary>
     public void RetryFetch()
     {

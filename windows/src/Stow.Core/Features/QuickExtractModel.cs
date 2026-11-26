@@ -15,13 +15,17 @@ public interface IClipboardReader
 
 public static class ClipboardUrl
 {
+    /// <summary>주소로 볼 수 있는 가장 긴 글자 수</summary>
+    public const int MaxLength = 2048;
+
     /// <summary>클립보드 글자가 유튜브 영상·재생목록 주소 하나면 앞뒤 공백을 지워 돌려준다.</summary>
     public static string? YouTubeText(string? text)
     {
-        if (text is null) return null;
+        // 앞뒤 공백을 지우기 전에 잰다(주소 뒤에 긴 공백과 다른 글자가 붙은 글은 주소 하나가 아니다).
+        if (text is null || text.Length > MaxLength) return null;
         var trimmed = text.Trim();
         // 여러 줄이거나 너무 길면 주소 하나가 아니다.
-        if (trimmed.Length == 0 || trimmed.Length > 2048 || trimmed.IndexOfAny(['\r', '\n']) >= 0) return null;
+        if (trimmed.Length == 0 || trimmed.IndexOfAny(['\r', '\n']) >= 0) return null;
         try
         {
             YouTubeUrl.Parse(trimmed);
@@ -57,8 +61,8 @@ public sealed class QuickExtractModel(ExtractViewModel extract, IClipboardReader
     /// <summary>창을 닫아 달라는 요청</summary>
     public event Action? CloseRequested;
 
-    /// <summary>주소를 메인 창에서 열어 달라는 요청(재생목록에서 영상을 고를 때)</summary>
-    public event Action<string>? OpenInMainWindowRequested;
+    /// <summary>주소(와 이미 불러온 재생목록)를 메인 창에서 열어 달라는 요청(재생목록에서 영상을 고를 때)</summary>
+    public event Action<string, Playlist?>? OpenInMainWindowRequested;
 
     private bool isPresented;
     /// <summary>창이 열려 있는지(닫힌 뒤 늦게 끝난 클립보드 읽기·조회 결과를 버리는 데 쓴다)</summary>
@@ -115,8 +119,9 @@ public sealed class QuickExtractModel(ExtractViewModel extract, IClipboardReader
     public void OpenInMainWindow()
     {
         var text = Extract.UrlText;
+        var playlist = Extract.HasPlaylist ? Extract.Playlist : null;
         Dismiss();
-        OpenInMainWindowRequested?.Invoke(text);
+        OpenInMainWindowRequested?.Invoke(text, playlist);
     }
 
     /// <summary>Esc·바깥 클릭: 조회를 멈추고 닫는다.</summary>

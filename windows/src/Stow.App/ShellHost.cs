@@ -26,6 +26,8 @@ internal sealed unsafe partial class ShellHost : IDisposable
     private readonly uint taskbarCreatedMessage;
     private readonly IntPtr icon;
     private bool trayAdded;
+    /// <summary>트레이 아이콘을 보이기로 했는지(처음 등록이 실패해도 작업 표시줄이 준비되면 다시 넣는다)</summary>
+    private bool trayWanted;
     private bool hotKeyRegistered;
     private string toolTip = "Stow";
     private string quickExtractMenuText = "빠른 추출";
@@ -83,6 +85,7 @@ internal sealed unsafe partial class ShellHost : IDisposable
 
     public void ShowTrayIcon()
     {
+        trayWanted = true;
         var data = NewIconData(0x1 | 0x2 | 0x4 | 0x80 /* NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP */);
         trayAdded = Shell_NotifyIconW(0 /* NIM_ADD */, &data);
         if (!trayAdded) return;
@@ -93,6 +96,7 @@ internal sealed unsafe partial class ShellHost : IDisposable
     /// <summary>트레이 아이콘에 마우스를 올렸을 때의 글자(예: "Stow · 추출 중 1 · 대기 2")</summary>
     public void SetToolTip(string text)
     {
+        if (text == toolTip) return;
         toolTip = text;
         if (!trayAdded) return;
         var data = NewIconData(0x4 | 0x80 /* NIF_TIP | NIF_SHOWTIP */);
@@ -127,7 +131,7 @@ internal sealed unsafe partial class ShellHost : IDisposable
         AppendMenuW(menu, 0x800 /* MF_SEPARATOR */, 0, null);
         AppendMenuW(menu, 0, (nuint)TrayCommand.Quit, "종료");
         // 메뉴 바깥을 누르면 닫히게 하려면 먼저 앞으로 가져와야 한다(Win32 메뉴의 알려진 요구 사항).
-        SetForegroundWindow(hwnd);
+        NativeMethods.SetForegroundWindow(hwnd);
         var command = TrackPopupMenuEx(menu, 0x0100 | 0x0080 | 0x0002 /* TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON */, x, y, hwnd, IntPtr.Zero);
         PostMessageW(hwnd, 0 /* WM_NULL */, IntPtr.Zero, IntPtr.Zero);
         DestroyMenu(menu);
@@ -159,8 +163,8 @@ internal sealed unsafe partial class ShellHost : IDisposable
         }
         if (message == taskbarCreatedMessage && taskbarCreatedMessage != 0)
         {
-            // 탐색기가 다시 시작되면 트레이 아이콘을 다시 넣는다.
-            if (trayAdded) ShowTrayIcon();
+            // 탐색기가 다시 시작되거나(Windows 시작 직후 실행으로) 처음 등록이 실패했으면 작업 표시줄이 준비된 지금 넣는다.
+            if (trayWanted) ShowTrayIcon();
             return false;
         }
         if (message != WM_APP_TRAY) return false;
@@ -284,9 +288,6 @@ internal sealed unsafe partial class ShellHost : IDisposable
     private static partial bool DestroyMenu(IntPtr menu);
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetForegroundWindow(IntPtr hwnd);
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool PostMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 }
 
@@ -319,11 +320,13 @@ internal sealed partial class WindowsClipboard : IClipboardReader
             if (pointer == IntPtr.Zero) return true;
             try
             {
-                // 아주 긴 글자는 주소가 아니므로 앞부분만 읽는다(주소 판별은 2048자까지).
-                var size = (int)Math.Min((long)GlobalSize(handle) / 2, 4096);
+                // 주소는 2048자까지만 받으므로 그보다 길면 주소가 아니다(앞부분만 잘라 주소로 보지 않게 통째로 버린다).
+                const int limit = ClipboardUrl.MaxLength + 1;
+                var size = (int)Math.Min((long)GlobalSize(handle) / 2, limit + 1);
                 var span = new ReadOnlySpan<char>((void*)pointer, size);
                 var end = span.IndexOf('\0');
-                text = new string(end >= 0 ? span[..end] : span);
+                var content = end >= 0 ? span[..end] : span;
+                text = content.Length > ClipboardUrl.MaxLength ? null : new string(content);
             }
             finally
             {

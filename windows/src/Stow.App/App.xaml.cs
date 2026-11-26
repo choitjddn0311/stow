@@ -25,6 +25,8 @@ public partial class App : Application
     private ExtractQueue? queue;
     private YtDlpClient? client;
     private bool shuttingDown;
+    /// <summary>시작하는 동안 다른 실행이 넘어왔으면 창을 만든 뒤 보인다.</summary>
+    private bool showWhenReady;
 
     public App()
     {
@@ -35,6 +37,15 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // 다른 곳에서 Stow를 다시 실행하면(시작 메뉴 등) 이미 실행 중인 이 앱의 창을 보인다(Program.Main이 넘긴다).
+        // 시작 준비 중에 넘어온 것도 놓치지 않게 가장 먼저 연결한다.
+        var dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        AppInstance.GetCurrent().Activated += (_, _) => dispatcher.TryEnqueue(() =>
+        {
+            if (mainWindow is null) showWhenReady = true;
+            else ShowMainWindow();
+        });
+
         // 알림을 먼저 등록해야 앱이 꺼진 뒤 누른 완료 알림으로 다시 켜졌을 때도 처리할 수 있다.
         notifier.Register();
         var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
@@ -73,14 +84,10 @@ public partial class App : Application
         window.HiddenToTray += OnHiddenToTray;
         window.Closed += (_, _) => Shutdown();
 
-        // 다른 곳에서 Stow를 다시 실행하면(시작 메뉴 등) 이미 실행 중인 이 앱의 창을 보인다(Program.Main이 넘긴다).
-        var dispatcher = window.DispatcherQueue;
-        AppInstance.GetCurrent().Activated += (_, _) => dispatcher.TryEnqueue(ShowMainWindow);
-
         // Windows 시작 때 실행되었으면 트레이에서 조용히 시작한다(이용 고지에 아직 동의하지 않았으면 창을 보인다).
         var background = Environment.GetCommandLineArgs().Contains(StartupRegistration.BackgroundArgument)
             && appSettings.AcceptedNoticeVersion >= UsageNotice.Version;
-        if (!background) window.Activate();
+        if (!background || showWhenReady) window.Activate();
     }
 
     private void OpenQuickExtract()
@@ -95,10 +102,10 @@ public partial class App : Application
         if (quickWindow is null)
         {
             var model = new QuickExtractModel(new ExtractViewModel(settings, client, queue), new WindowsClipboard());
-            model.OpenInMainWindowRequested += url =>
+            model.OpenInMainWindowRequested += (url, playlist) =>
             {
                 ShowMainWindow();
-                window.ViewModel.UrlText = url;
+                window.ViewModel.Open(url, playlist);
             };
             quickWindow = new QuickExtractWindow(model);
         }
@@ -118,9 +125,12 @@ public partial class App : Application
     private void OnHiddenToTray()
     {
         if (settings is null || settings.TrayNoticeShown) return;
-        settings.TrayNoticeShown = true;
         var shortcut = hotKeys?.IsActive == true ? $"{settings.QuickExtractHotKey}로 빠른 추출을 열 수 있습니다. " : "";
-        notifier.NotifyInfo("Stow가 트레이에서 계속 실행됩니다", $"{shortcut}끝내려면 트레이 아이콘을 오른쪽 클릭해 종료하세요.");
+        // 알림을 띄우지 못했으면(알림이 꺼져 있는 등) 다음에 다시 시도한다.
+        if (notifier.NotifyInfo("Stow가 트레이에서 계속 실행됩니다", $"{shortcut}끝내려면 트레이 아이콘을 오른쪽 클릭해 종료하세요."))
+        {
+            settings.TrayNoticeShown = true;
+        }
     }
 
     /// <summary>트레이 메뉴 "종료": 진행 중인 추출을 정리하고(메인 창 닫기 처리) 앱을 끝낸다.</summary>

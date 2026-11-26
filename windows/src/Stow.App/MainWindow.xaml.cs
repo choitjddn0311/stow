@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -53,7 +52,7 @@ public sealed partial class MainWindow : Window
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "Stow.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
         ApplyBackdrop();
-        var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
+        var scale = NativeMethods.GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)Math.Round(InitialWidth * scale), (int)Math.Round(InitialHeight * scale)));
 
         var missing = engine.MissingComponents();
@@ -210,11 +209,11 @@ public sealed partial class MainWindow : Window
                 QualityIcon.Glyph = "";
                 QualityDescription.Text = "";
                 QualityBox.Visibility = Visibility.Visible;
-                foreach (var bitrate in new[] { Mp3Bitrate.Kbps320, Mp3Bitrate.Kbps192, Mp3Bitrate.Kbps128 })
+                foreach (var bitrate in FormatChoices.Mp3Bitrates)
                 {
                     QualityBox.Items.Add(new ComboBoxItem { Content = $"{(int)bitrate} kbps", Tag = bitrate });
                 }
-                QualityBox.SelectedIndex = settings.Mp3Bitrate switch { Mp3Bitrate.Kbps192 => 1, Mp3Bitrate.Kbps128 => 2, _ => 0 };
+                QualityBox.SelectedIndex = FormatChoices.Mp3Bitrates.ToList().IndexOf(settings.Mp3Bitrate);
             }
             else
             {
@@ -418,7 +417,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>트레이·다른 실행에서 창을 보일 때 다른 앱 위로 가져온다.</summary>
-    internal void BringToFront() => SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+    internal void BringToFront() => NativeMethods.SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
 
     // MARK: 창
 
@@ -429,10 +428,4 @@ public sealed partial class MainWindow : Window
         else RootGrid.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
     }
 
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetForegroundWindow(IntPtr hwnd);
 }

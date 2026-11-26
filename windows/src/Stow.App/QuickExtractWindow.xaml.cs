@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -28,6 +27,8 @@ public sealed partial class QuickExtractWindow : Window
     private bool choosingFolder;
     private bool fitPending;
     private bool isShown;
+    /// <summary>폴더 메뉴에 보일 최근 폴더(있는지 확인은 창을 열 때 화면 스레드 밖에서 한다: 끊긴 네트워크 드라이브가 메뉴를 멈추지 않게)</summary>
+    private IReadOnlyList<string>? availableRecents;
 
     public QuickExtractModel Model { get; }
 
@@ -73,10 +74,16 @@ public sealed partial class QuickExtractWindow : Window
             return;
         }
         isShown = true;
+        var settings = Model.Extract.Settings;
+        availableRecents = null;
+        _ = Task.Run(() => settings.AvailableRecentOutputDirectories).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully) DispatcherQueue.TryEnqueue(() => availableRecents = t.Result);
+        }, TaskScheduler.Default);
         PlaceOnCursorScreen();
         AppWindow.Show(true);
         Activate();
-        SetForegroundWindow(Handle);
+        NativeMethods.SetForegroundWindow(Handle);
         UrlBox.Focus(FocusState.Programmatic);
         await Model.PrepareForPresentationAsync();
         UrlBox.SelectAll();
@@ -154,11 +161,9 @@ public sealed partial class QuickExtractWindow : Window
     {
         var settings = Model.Extract.Settings;
         FormatMenu.Items.Clear();
-        OutputFormat[] audio = [new OutputFormat.Mp3(Mp3Bitrate.Kbps320), new OutputFormat.Mp3(Mp3Bitrate.Kbps192),
-            new OutputFormat.Mp3(Mp3Bitrate.Kbps128), new OutputFormat.Wav(), new OutputFormat.Flac()];
-        foreach (var format in audio) FormatMenu.Items.Add(FormatItem(format, settings.Format));
+        foreach (var format in FormatChoices.Audio) FormatMenu.Items.Add(FormatItem(format, settings.Format));
         FormatMenu.Items.Add(new MenuFlyoutSeparator());
-        foreach (var videoFormat in new[] { VideoFormat.Mp4, VideoFormat.Best })
+        foreach (var videoFormat in FormatChoices.VideoFormats)
         {
             var sub = new MenuFlyoutSubItem { Text = DisplayText.Name(videoFormat) };
             foreach (var resolution in videoFormat.Resolutions())
@@ -184,7 +189,8 @@ public sealed partial class QuickExtractWindow : Window
     {
         var settings = Model.Extract.Settings;
         FolderMenu.Items.Clear();
-        foreach (var directory in settings.AvailableRecentOutputDirectories)
+        // 확인이 아직 안 끝났으면 저장된 목록 그대로(지금 폴더가 맨 앞)
+        foreach (var directory in availableRecents ?? settings.RecentOutputDirectories)
         {
             var item = new RadioMenuFlyoutItem
             {
@@ -206,8 +212,15 @@ public sealed partial class QuickExtractWindow : Window
             var directory = settings.OutputDirectory;
             if (!Directory.Exists(directory)) return;
             Model.Dismiss();
-            // 폴더 경로를 그대로 열게 한다(명령줄 문자열을 만들지 않는다).
-            Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+            try
+            {
+                // 폴더 경로를 그대로 열게 한다(명령줄 문자열을 만들지 않는다).
+                Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+            }
+            catch (Exception)
+            {
+                // 폴더를 열지 못해도(빠진 USB 등) 앱은 계속한다.
+            }
         };
         FolderMenu.Items.Add(reveal);
     }
@@ -236,7 +249,7 @@ public sealed partial class QuickExtractWindow : Window
     /// <summary>마우스가 있는 화면의 작업 영역 위쪽 가운데(위에서 1/6 지점)로 옮긴다.</summary>
     private void PlaceOnCursorScreen()
     {
-        GetCursorPos(out var cursor);
+        NativeMethods.GetCursorPos(out var cursor);
         var area = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest).WorkArea;
         // 먼저 그 화면으로 옮겨야 그 화면의 배율로 크기를 잰다.
         AppWindow.Move(new PointInt32(area.X + area.Width / 3, area.Y + area.Height / 6));
@@ -258,24 +271,11 @@ public sealed partial class QuickExtractWindow : Window
     /// <summary>창 높이를 내용에 맞춘다(위쪽 위치는 그대로).</summary>
     private void FitToContent()
     {
-        var scale = GetDpiForWindow(Handle) / 96.0;
+        var scale = NativeMethods.GetDpiForWindow(Handle) / 96.0;
         RootGrid.Measure(new Size(PanelWidth, double.PositiveInfinity));
         var height = Math.Ceiling(RootGrid.DesiredSize.Height);
         if (height <= 0) height = 120;
         AppWindow.ResizeClient(new SizeInt32((int)Math.Round(PanelWidth * scale), (int)Math.Round(height * scale)));
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int X, Y; }
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GetCursorPos(out POINT point);
-
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool SetForegroundWindow(IntPtr hwnd);
-
-    [LibraryImport("user32.dll")]
-    private static partial uint GetDpiForWindow(IntPtr hwnd);
 }
