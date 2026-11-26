@@ -57,8 +57,10 @@ public sealed class HttpFetcher : IHttpFetcher
             if (!response.IsSuccessStatusCode) throw new EngineUpdateException(EngineUpdateErrorKind.Network, $"HTTP {(int)response.StatusCode}");
             return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception error) when (error is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        catch (Exception error) when (error is not EngineUpdateException
+            && !(error is OperationCanceledException && cancellationToken.IsCancellationRequested))
         {
+            // 연결 끊김·응답 본문 중간 끊김(IOException)·시간 초과 등 전송 실패는 모두 네트워크 오류로 본다.
             throw new EngineUpdateException(EngineUpdateErrorKind.Network, error.Message, error);
         }
     }
@@ -76,6 +78,8 @@ public sealed class EngineUpdater(string storage, EngineLocator engine, IHttpFet
     Func<string, CancellationToken, Task<string>>? versionReader = null)
 {
     public static readonly Uri LatestReleaseApi = new("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest");
+    /// <summary>버전 확인 실행이 이보다 오래 걸리면 실패로 본다(백신 검사 등으로 멈춰도 확인이 영영 끝나지 않는 일이 없게).</summary>
+    public static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(60);
 
     private readonly IHttpFetcher fetcher = fetcher ?? new HttpFetcher();
     private readonly ProcessRunner runner = runner ?? new ProcessRunner();
@@ -126,11 +130,17 @@ public sealed class EngineUpdater(string storage, EngineLocator engine, IHttpFet
         // 테스트: Python 없이 파일 내용으로 버전을 정한다.
         if (versionReader is not null) return await versionReader(ytDlp, cancellationToken).ConfigureAwait(false);
         ProcessResult result;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(VersionTimeout);
         try
         {
-            result = await runner.RunAsync(engine.YtDlpCommand(ytDlp, ["--version"]), null, cancellationToken).ConfigureAwait(false);
+            result = await runner.RunAsync(engine.YtDlpCommand(ytDlp, ["--version"]), null, timeout.Token).ConfigureAwait(false);
         }
-        catch (ProcessLaunchException error)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new EngineUpdateException(EngineUpdateErrorKind.ValidationFailed, "시간 초과");
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
         {
             throw new EngineUpdateException(EngineUpdateErrorKind.ValidationFailed, error.Message, error);
         }

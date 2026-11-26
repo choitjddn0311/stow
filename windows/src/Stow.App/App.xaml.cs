@@ -112,22 +112,35 @@ public partial class App : Application
     {
         var timer = updateTimer = dispatcher.CreateTimer();
         timer.Interval = TimeSpan.FromHours(1);
-        timer.Tick += async (_, _) =>
-        {
-            await engineService.CheckAsync(manual: false);
-            await updater.CheckAsync(manual: false);
-        };
+        timer.Tick += async (_, _) => await CheckBothAsync(engineService, updater);
         try
         {
-            await engineService.ActivateInstalledAsync();
-            await engineService.CheckAsync(manual: false);
-            await updater.CheckAsync(manual: false);
+            // 서로 관계없으므로 함께 돈다(앱 업데이트 확인이 엔진 받기를 기다리지 않게).
+            await Task.WhenAll(ActivateThenCheckAsync(), updater.CheckAsync(manual: false));
         }
         catch (Exception)
         {
             // 업데이트 확인이 실패해도 앱은 그대로 쓴다.
         }
         timer.Start();
+
+        async Task ActivateThenCheckAsync()
+        {
+            await engineService.ActivateInstalledAsync();
+            await engineService.CheckAsync(manual: false);
+        }
+    }
+
+    private static async Task CheckBothAsync(EngineUpdateService engineService, AppUpdater updater)
+    {
+        try
+        {
+            await Task.WhenAll(engineService.CheckAsync(manual: false), updater.CheckAsync(manual: false));
+        }
+        catch (Exception)
+        {
+            // 자동 확인의 실패는 다음 확인 때 다시 시도한다.
+        }
     }
 
     private void OpenQuickExtract()
@@ -193,12 +206,24 @@ public partial class App : Application
         Exit();
     }
 
-    /// <summary>업데이트를 설치하려고 다시 시작하기 직전: 트레이 아이콘·단축키를 먼저 정리한다.</summary>
-    internal void PrepareForRestart()
+    /// <summary>
+    /// 업데이트를 설치하며 다시 시작한다. 트레이 아이콘을 먼저 빼고(끝난 뒤 남지 않게), 실패하면 되돌리고 false.
+    /// 단축키는 프로세스가 끝나면 Windows가 풀어 준다.
+    /// </summary>
+    internal bool RestartToUpdate()
     {
-        shuttingDown = true;
-        updateTimer?.Stop();
-        shell?.Dispose();
+        if (appUpdater is null || shell is null) return false;
+        shell.HideTrayIcon();
+        try
+        {
+            appUpdater.ApplyAndRestart();
+            return true;
+        }
+        catch (Exception)
+        {
+            shell.ShowTrayIcon();
+            return false;
+        }
     }
 }
 

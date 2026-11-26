@@ -23,6 +23,9 @@ public sealed class EngineUpdateService(EngineUpdater updater, EngineLocator eng
 
     private readonly Func<DateTimeOffset> now = now ?? (() => DateTimeOffset.Now);
     private string? bundledVersion = engine.BundledYtDlpVersion;
+
+    /// <summary>앱에 들어 있는 yt-dlp 버전(알면)</summary>
+    public string? BundledVersion => bundledVersion;
     private bool activated;
 
     private string? activeVersion;
@@ -42,8 +45,9 @@ public sealed class EngineUpdateService(EngineUpdater updater, EngineLocator eng
         var bundled = await ResolvedBundledVersionAsync();
         ActiveVersion = bundled;
 
-        // 번들 버전을 모르거나, 받아 둔 버전이 더 새롭지 않거나, 되돌린 버전이거나, 실행되지 않으면 쓰지 않는다.
-        if (updater.Installed() is not { } installed || bundled is null || !EngineUpdater.IsNewer(installed.Version, bundled)
+        // 받아 둔 버전이 번들보다 새롭지 않거나, 되돌린 버전이거나, 실행되지 않으면 쓰지 않는다.
+        // 번들 버전을 모르면(번들이 실행되지 않는 경우) 받아 둔 것이 실행되는 한 그것을 쓴다.
+        if (updater.Installed() is not { } installed || (bundled is not null && !EngineUpdater.IsNewer(installed.Version, bundled))
             || installed.Version == settings.RejectedEngineVersion
             || await TryVersionAsync(installed.Path) != installed.Version)
         {
@@ -90,10 +94,11 @@ public sealed class EngineUpdateService(EngineUpdater updater, EngineLocator eng
         {
             return null;
         }
-        catch (EngineUpdateException error)
+        catch (Exception error)
         {
-            // 자동 확인의 실패는 조용히 넘어간다.
-            return manual ? new("엔진 업데이트를 확인하지 못했습니다.", error.Message, IsError: true) : null;
+            // 자동 확인의 실패는 조용히 넘어간다(확인 시각을 남기지 않았으므로 다음에 다시 시도). 어떤 실패도 앱을 끝내지 않게 모두 받는다.
+            var message = error is EngineUpdateException ? error.Message : "업데이트 정보를 받지 못했습니다. 인터넷 연결을 확인해 주세요.";
+            return manual ? new("엔진 업데이트를 확인하지 못했습니다.", message, IsError: true) : null;
         }
         finally
         {
@@ -104,6 +109,8 @@ public sealed class EngineUpdateService(EngineUpdater updater, EngineLocator eng
     /// <summary>"앱에 들어 있는 엔진으로 되돌리기"</summary>
     public EngineUpdateResult RevertToBundled()
     {
+        // 확인·설치 중에 되돌리면 끝난 설치가 되돌리기를 덮어쓴다.
+        if (IsChecking) return new("엔진 업데이트를 확인하는 중입니다.", "끝난 뒤 다시 시도해 주세요.");
         if (!IsUsingDownloadedEngine) return new("앱에 들어 있는 엔진을 쓰고 있습니다.", "되돌릴 업데이트가 없습니다.");
         var rejected = ActiveVersion;
         if (rejected is not null) settings.RejectedEngineVersion = rejected;

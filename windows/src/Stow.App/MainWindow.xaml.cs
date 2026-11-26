@@ -441,9 +441,10 @@ public sealed partial class MainWindow : Window
             UpdateInfoBar.IsOpen = true;
         }
 
-        var version = engineUpdates.ActiveVersion ?? engine.BundledYtDlpVersion;
+        var version = engineUpdates.ActiveVersion ?? engineUpdates.BundledVersion;
         EngineVersionText.Text = version is null ? "추출 엔진(yt-dlp)" : $"추출 엔진(yt-dlp {version})";
         EngineUpdateButton.IsEnabled = !engineUpdates.IsChecking;
+        RevertEngineButton.IsEnabled = !engineUpdates.IsChecking;
         RevertEngineButton.Visibility = engineUpdates.IsUsingDownloadedEngine ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -453,9 +454,16 @@ public sealed partial class MainWindow : Window
     /// <summary>트레이 메뉴 "업데이트 확인": 앱과 엔진을 바로 확인한다.</summary>
     internal async void CheckUpdatesNow()
     {
-        var engineCheck = engineUpdates.CheckAsync(manual: true);
-        await appUpdater.CheckAsync(manual: true);
-        ShowEngineResult(await engineCheck);
+        try
+        {
+            var engineCheck = engineUpdates.CheckAsync(manual: true);
+            await appUpdater.CheckAsync(manual: true);
+            ShowEngineResult(await engineCheck);
+        }
+        catch (Exception)
+        {
+            // 확인 실패가 앱을 끝내지 않게 한다(결과 문구는 각 카드에 남는다).
+        }
     }
 
     private async void OnAppUpdateButton(object sender, RoutedEventArgs e)
@@ -481,13 +489,25 @@ public sealed partial class MainWindow : Window
                 DefaultButton = ContentDialogButton.Close,
             };
             if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-            await Task.WhenAny(ViewModel.Queue.CancelAndWaitAsync(), Task.Delay(TimeSpan.FromSeconds(5)));
+            // 추출 프로세스(ffmpeg·python)가 앱 폴더의 파일을 쥐고 있으면 설치가 실패하므로 정리가 끝날 때까지 기다린다.
+            var cancel = ViewModel.Queue.CancelAndWaitAsync();
+            if (await Task.WhenAny(cancel, Task.Delay(TimeSpan.FromSeconds(20))) != cancel)
+            {
+                AppUpdateStatus.Text = "받던 항목을 아직 정리하는 중입니다. 잠시 후 다시 눌러 주세요.";
+                return;
+            }
         }
-        ((App)Application.Current).PrepareForRestart();
-        appUpdater.ApplyAndRestart();
+        if (!((App)Application.Current).RestartToUpdate())
+        {
+            AppUpdateStatus.Text = "업데이트를 설치하지 못했습니다. Stow를 종료할 때 다시 시도합니다.";
+        }
     }
 
-    private async void OnCheckEngine(object sender, RoutedEventArgs e) => ShowEngineResult(await engineUpdates.CheckAsync(manual: true));
+    private async void OnCheckEngine(object sender, RoutedEventArgs e)
+    {
+        try { ShowEngineResult(await engineUpdates.CheckAsync(manual: true)); }
+        catch (Exception) { }
+    }
 
     private void OnRevertEngine(object sender, RoutedEventArgs e) => ShowEngineResult(engineUpdates.RevertToBundled());
 

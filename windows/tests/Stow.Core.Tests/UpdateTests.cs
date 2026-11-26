@@ -12,10 +12,13 @@ internal sealed class FakeFetcher : IHttpFetcher
 {
     public Dictionary<string, byte[]> Responses { get; } = [];
     public int Requests;
+    /// <summary>예상하지 못한 예외(엔진 업데이트 오류가 아닌 것)를 던진다.</summary>
+    public Exception? Unexpected { get; set; }
 
     public Task<byte[]> GetAsync(Uri url, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref Requests);
+        if (Unexpected is { } unexpected) throw unexpected;
         return Responses.TryGetValue(url.ToString(), out var data)
             ? Task.FromResult(data)
             : throw new EngineUpdateException(EngineUpdateErrorKind.Network);
@@ -190,6 +193,36 @@ public class EngineUpdateServiceTests
         Assert.Equal("새로 설치할 엔진이 없습니다.", result?.Title);
         Assert.False(service.IsUsingDownloadedEngine);
         Assert.Equal("앱에 들어 있는 엔진을 쓰고 있습니다.", service.RevertToBundled().Title);
+    }
+
+    [Fact]
+    public async Task UnexpectedErrorsNeverEscape()
+    {
+        var (service, _, _, fetcher, settings, _, _) = Make();
+        fetcher.Unexpected = new IOException("연결이 끊겼습니다");
+        await service.ActivateInstalledAsync();
+        Assert.Null(await service.CheckAsync(manual: false, TestContext.Current.CancellationToken));
+        var manual = await service.CheckAsync(manual: true, TestContext.Current.CancellationToken);
+        Assert.True(manual?.IsError);
+        Assert.False(service.IsChecking);
+        Assert.Null(settings.LastEngineCheck);
+    }
+
+    [Fact]
+    public async Task UnknownBundledVersionStillUsesWorkingDownloadedEngine()
+    {
+        var (first, updater, engine, _, settings, _, _) = Make();
+        await first.ActivateInstalledAsync();
+        await first.CheckAsync(manual: true, TestContext.Current.CancellationToken);
+
+        // 번들 버전 파일이 없고 번들 yt-dlp도 실행되지 않는 경우
+        engine.YtDlpOverride = null;
+        File.Delete(Path.Combine(engine.Directory, "yt-dlp.version"));
+        File.WriteAllText(Path.Combine(engine.Directory, "yt-dlp"), "망가진 파일");
+        var next = new EngineUpdateService(updater, engine, settings);
+        await next.ActivateInstalledAsync();
+        Assert.True(next.IsUsingDownloadedEngine);
+        Assert.Equal("2026.11.20", next.ActiveVersion);
     }
 
     [Fact]
