@@ -24,6 +24,9 @@ public partial class App : Application
     private AppSettings? settings;
     private ExtractQueue? queue;
     private YtDlpClient? client;
+    private AppUpdater? appUpdater;
+    private EngineUpdateService? engineUpdates;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? updateTimer;
     private bool shuttingDown;
     /// <summary>시작하는 동안 다른 실행이 넘어왔으면 창을 만든 뒤 보인다.</summary>
     private bool showWhenReady;
@@ -72,6 +75,10 @@ public partial class App : Application
             {
                 case ShellHost.TrayCommand.QuickExtract: OpenQuickExtract(); break;
                 case ShellHost.TrayCommand.OpenMainWindow: ShowMainWindow(); break;
+                case ShellHost.TrayCommand.CheckUpdates:
+                    ShowMainWindow();
+                    mainWindow?.CheckUpdatesNow();
+                    break;
                 case ShellHost.TrayCommand.Quit: Quit(); break;
             }
         };
@@ -80,7 +87,14 @@ public partial class App : Application
         extractQueue.PropertyChanged += (_, _) => host.SetToolTip(extractQueue.IsEmpty ? "Stow" : $"Stow · {extractQueue.SummaryText}");
         StartupRegistration.RefreshPathIfEnabled();
 
-        var window = mainWindow = new MainWindow(new ExtractViewModel(appSettings, engineClient, extractQueue), engine, hotKeyController);
+        var engineService = engineUpdates = new EngineUpdateService(
+            new EngineUpdater(Path.Combine(dataDirectory, "engine", "yt-dlp"), engine), engine, appSettings);
+        var updater = appUpdater = new AppUpdater();
+        updater.UpdateReady += version =>
+            notifier.NotifyInfo($"Stow {version} 업데이트를 받았습니다", "다시 시작하거나 종료할 때 설치됩니다. Stow 창 위쪽 안내에서 바로 설치할 수 있습니다.");
+
+        var window = mainWindow = new MainWindow(new ExtractViewModel(appSettings, engineClient, extractQueue), engine, hotKeyController,
+            updater, engineService);
         window.HiddenToTray += OnHiddenToTray;
         window.Closed += (_, _) => Shutdown();
 
@@ -88,6 +102,45 @@ public partial class App : Application
         var background = Environment.GetCommandLineArgs().Contains(StartupRegistration.BackgroundArgument)
             && appSettings.AcceptedNoticeVersion >= UsageNotice.Version;
         if (!background || showWhenReady) window.Activate();
+        StartUpdates(dispatcher, engineService, updater);
+    }
+
+    /// <summary>
+    /// 엔진: 받아 둔 새 버전을 쓸지 정한 뒤 하루에 한 번 확인·설치. 앱: 켤 때와 1시간마다 확인해 받아 둔다.
+    /// </summary>
+    private async void StartUpdates(Microsoft.UI.Dispatching.DispatcherQueue dispatcher, EngineUpdateService engineService, AppUpdater updater)
+    {
+        var timer = updateTimer = dispatcher.CreateTimer();
+        timer.Interval = TimeSpan.FromHours(1);
+        timer.Tick += async (_, _) => await CheckBothAsync(engineService, updater);
+        try
+        {
+            // 서로 관계없으므로 함께 돈다(앱 업데이트 확인이 엔진 받기를 기다리지 않게).
+            await Task.WhenAll(ActivateThenCheckAsync(), updater.CheckAsync(manual: false));
+        }
+        catch (Exception)
+        {
+            // 업데이트 확인이 실패해도 앱은 그대로 쓴다.
+        }
+        timer.Start();
+
+        async Task ActivateThenCheckAsync()
+        {
+            await engineService.ActivateInstalledAsync();
+            await engineService.CheckAsync(manual: false);
+        }
+    }
+
+    private static async Task CheckBothAsync(EngineUpdateService engineService, AppUpdater updater)
+    {
+        try
+        {
+            await Task.WhenAll(engineService.CheckAsync(manual: false), updater.CheckAsync(manual: false));
+        }
+        catch (Exception)
+        {
+            // 자동 확인의 실패는 다음 확인 때 다시 시도한다.
+        }
     }
 
     private void OpenQuickExtract()
@@ -146,8 +199,31 @@ public partial class App : Application
     {
         if (shuttingDown) return;
         shuttingDown = true;
+        updateTimer?.Stop();
         shell?.Dispose();
+        // 받아 둔 앱 업데이트가 있으면 앱이 끝난 뒤 조용히 설치한다.
+        appUpdater?.ApplyOnExit();
         Exit();
+    }
+
+    /// <summary>
+    /// 업데이트를 설치하며 다시 시작한다. 트레이 아이콘을 먼저 빼고(끝난 뒤 남지 않게), 실패하면 되돌리고 false.
+    /// 단축키는 프로세스가 끝나면 Windows가 풀어 준다.
+    /// </summary>
+    internal bool RestartToUpdate()
+    {
+        if (appUpdater is null || shell is null) return false;
+        shell.HideTrayIcon();
+        try
+        {
+            appUpdater.ApplyAndRestart();
+            return true;
+        }
+        catch (Exception)
+        {
+            shell.ShowTrayIcon();
+            return false;
+        }
     }
 }
 

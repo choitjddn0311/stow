@@ -22,6 +22,8 @@ public sealed partial class MainWindow : Window
 
     private readonly EngineLocator engine;
     private readonly HotKeyController hotKeys;
+    private readonly AppUpdater appUpdater;
+    private readonly EngineUpdateService engineUpdates;
     /// <summary>코드에서 컨트롤 값을 맞추는 동안 바뀜 이벤트를 무시한다.</summary>
     private bool updatingControls;
     /// <summary>컨트롤 다시 만들기를 한 번으로 모은다(설정 하나를 바꿔도 알림이 여러 개 온다).</summary>
@@ -37,11 +39,14 @@ public sealed partial class MainWindow : Window
     /// <summary>창을 닫아 트레이로 숨겼다.</summary>
     internal event Action? HiddenToTray;
 
-    internal MainWindow(ExtractViewModel viewModel, EngineLocator engine, HotKeyController hotKeys)
+    internal MainWindow(ExtractViewModel viewModel, EngineLocator engine, HotKeyController hotKeys,
+        AppUpdater appUpdater, EngineUpdateService engineUpdates)
     {
         ViewModel = viewModel;
         this.engine = engine;
         this.hotKeys = hotKeys;
+        this.appUpdater = appUpdater;
+        this.engineUpdates = engineUpdates;
         var settings = viewModel.Settings;
 
         InitializeComponent();
@@ -49,6 +54,7 @@ public sealed partial class MainWindow : Window
             .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion ?? "0.0.0";
         Title = $"Stow {AppInfo.DisplayVersion(informational)}";
+        AppVersionText.Text = Title;
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "Stow.ico");
         if (File.Exists(icon)) AppWindow.SetIcon(icon);
         ApplyBackdrop();
@@ -71,6 +77,9 @@ public sealed partial class MainWindow : Window
         hotKeys.Changed += UpdateHotKeyCard;
         UpdateHotKeyCard();
         StartupSwitch.IsOn = SafeStartupEnabled();
+        appUpdater.PropertyChanged += (_, _) => UpdateUpdateCards();
+        engineUpdates.PropertyChanged += (_, _) => UpdateUpdateCards();
+        UpdateUpdateCards();
         RootGrid.Loaded += OnLoaded;
         AppWindow.Closing += OnClosing;
     }
@@ -414,6 +423,99 @@ public sealed partial class MainWindow : Window
         {
             StartupSwitch.IsOn = SafeStartupEnabled();
         }
+    }
+
+    // MARK: 업데이트
+
+    private void UpdateUpdateCards()
+    {
+        AppUpdateStatus.Text = appUpdater.StatusText;
+        AppUpdateButton.Content = appUpdater.IsReady ? "다시 시작해 설치" : "업데이트 확인";
+        AppUpdateButton.IsEnabled = appUpdater.IsSupported && !appUpdater.IsChecking;
+        UpdateInfoBar.Title = appUpdater.IsReady ? $"Stow {appUpdater.ReadyVersion}을 설치할 준비가 됐습니다" : "";
+        UpdateInfoBar.Message = "지금 다시 시작하거나, 나중에 Stow를 종료할 때 설치됩니다.";
+        if (!appUpdater.IsReady) UpdateInfoBar.IsOpen = false;
+        else if (!updateBarShown)
+        {
+            updateBarShown = true;
+            UpdateInfoBar.IsOpen = true;
+        }
+
+        var version = engineUpdates.ActiveVersion ?? engineUpdates.BundledVersion;
+        EngineVersionText.Text = version is null ? "추출 엔진(yt-dlp)" : $"추출 엔진(yt-dlp {version})";
+        EngineUpdateButton.IsEnabled = !engineUpdates.IsChecking;
+        RevertEngineButton.IsEnabled = !engineUpdates.IsChecking;
+        RevertEngineButton.Visibility = engineUpdates.IsUsingDownloadedEngine ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>안내 줄은 버전마다 한 번만 자동으로 연다(닫으면 "나중에").</summary>
+    private bool updateBarShown;
+
+    /// <summary>트레이 메뉴 "업데이트 확인": 앱과 엔진을 바로 확인한다.</summary>
+    internal async void CheckUpdatesNow()
+    {
+        try
+        {
+            var engineCheck = engineUpdates.CheckAsync(manual: true);
+            await appUpdater.CheckAsync(manual: true);
+            ShowEngineResult(await engineCheck);
+        }
+        catch (Exception)
+        {
+            // 확인 실패가 앱을 끝내지 않게 한다(결과 문구는 각 카드에 남는다).
+        }
+    }
+
+    private async void OnAppUpdateButton(object sender, RoutedEventArgs e)
+    {
+        if (appUpdater.IsReady) await RestartToUpdateAsync();
+        else await appUpdater.CheckAsync(manual: true);
+    }
+
+    private async void OnRestartToUpdate(object sender, RoutedEventArgs e) => await RestartToUpdateAsync();
+
+    /// <summary>받는 중인 항목이 있으면 확인한 뒤 취소하고, 업데이트를 설치하며 다시 시작한다.</summary>
+    private async Task RestartToUpdateAsync()
+    {
+        if (ViewModel.Queue.HasPendingItems)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = RootGrid.XamlRoot,
+                Title = "지금 다시 시작할까요?",
+                Content = "받는 중이거나 기다리는 항목이 취소됩니다. 끝난 뒤에 설치하려면 \"나중에\"를 누르세요. 종료할 때도 설치됩니다.",
+                PrimaryButtonText = "취소하고 다시 시작",
+                CloseButtonText = "나중에",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+            // 추출 프로세스(ffmpeg·python)가 앱 폴더의 파일을 쥐고 있으면 설치가 실패하므로 정리가 끝날 때까지 기다린다.
+            var cancel = ViewModel.Queue.CancelAndWaitAsync();
+            if (await Task.WhenAny(cancel, Task.Delay(TimeSpan.FromSeconds(20))) != cancel)
+            {
+                AppUpdateStatus.Text = "받던 항목을 아직 정리하는 중입니다. 잠시 후 다시 눌러 주세요.";
+                return;
+            }
+        }
+        if (!((App)Application.Current).RestartToUpdate())
+        {
+            AppUpdateStatus.Text = "업데이트를 설치하지 못했습니다. Stow를 종료할 때 다시 시도합니다.";
+        }
+    }
+
+    private async void OnCheckEngine(object sender, RoutedEventArgs e)
+    {
+        try { ShowEngineResult(await engineUpdates.CheckAsync(manual: true)); }
+        catch (Exception) { }
+    }
+
+    private void OnRevertEngine(object sender, RoutedEventArgs e) => ShowEngineResult(engineUpdates.RevertToBundled());
+
+    private void ShowEngineResult(EngineUpdateResult? result)
+    {
+        if (result is null) return;
+        EngineUpdateStatus.Text = $"{result.Title} {result.Detail}";
+        EngineUpdateStatus.Foreground = (Brush)Application.Current.Resources[result.IsError ? "SystemFillColorCriticalBrush" : "TextFillColorSecondaryBrush"];
     }
 
     /// <summary>트레이·다른 실행에서 창을 보일 때 다른 앱 위로 가져온다.</summary>

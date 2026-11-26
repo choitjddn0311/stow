@@ -10,7 +10,7 @@ namespace Stow;
 /// </summary>
 internal sealed unsafe partial class ShellHost : IDisposable
 {
-    public enum TrayCommand { QuickExtract = 1, OpenMainWindow, Quit }
+    public enum TrayCommand { QuickExtract = 1, OpenMainWindow, CheckUpdates, Quit }
 
     private const int HotKeyId = 1;
     private const uint TrayIconId = 1;
@@ -93,6 +93,16 @@ internal sealed unsafe partial class ShellHost : IDisposable
         Shell_NotifyIconW(4 /* NIM_SETVERSION */, &data);
     }
 
+    /// <summary>트레이 아이콘을 뺀다(업데이트하려고 다시 시작하기 직전. 실패하면 <see cref="ShowTrayIcon"/>으로 다시 넣는다).</summary>
+    public void HideTrayIcon()
+    {
+        trayWanted = false;
+        if (!trayAdded) return;
+        var data = NewIconData(0);
+        Shell_NotifyIconW(2 /* NIM_DELETE */, &data);
+        trayAdded = false;
+    }
+
     /// <summary>트레이 아이콘에 마우스를 올렸을 때의 글자(예: "Stow · 추출 중 1 · 대기 2")</summary>
     public void SetToolTip(string text)
     {
@@ -129,6 +139,7 @@ internal sealed unsafe partial class ShellHost : IDisposable
         AppendMenuW(menu, 0 /* MF_STRING */, (nuint)TrayCommand.QuickExtract, quickExtractMenuText);
         AppendMenuW(menu, 0, (nuint)TrayCommand.OpenMainWindow, "Stow 열기");
         AppendMenuW(menu, 0x800 /* MF_SEPARATOR */, 0, null);
+        AppendMenuW(menu, 0, (nuint)TrayCommand.CheckUpdates, "업데이트 확인");
         AppendMenuW(menu, 0, (nuint)TrayCommand.Quit, "종료");
         // 메뉴 바깥을 누르면 닫히게 하려면 먼저 앞으로 가져와야 한다(Win32 메뉴의 알려진 요구 사항).
         NativeMethods.SetForegroundWindow(hwnd);
@@ -203,12 +214,7 @@ internal sealed unsafe partial class ShellHost : IDisposable
     public void Dispose()
     {
         UnregisterHotKey();
-        if (trayAdded)
-        {
-            var data = NewIconData(0);
-            Shell_NotifyIconW(2 /* NIM_DELETE */, &data);
-            trayAdded = false;
-        }
+        HideTrayIcon();
         if (icon != IntPtr.Zero) DestroyIcon(icon);
         DestroyWindow(hwnd);
         if (current == this) current = null;

@@ -24,6 +24,8 @@ public sealed class SettingsData
     public string? QuickExtractHotKey { get; set; }
     public bool? KeepRunningInTray { get; set; }
     public bool TrayNoticeShown { get; set; }
+    public DateTimeOffset? LastEngineCheck { get; set; }
+    public string? RejectedEngineVersion { get; set; }
 }
 
 public interface ISettingsStore
@@ -129,6 +131,20 @@ public sealed class AppSettings : ObservableObject
     {
         get => data.KeepRunningInTray ?? true;
         set => Change(() => data.KeepRunningInTray = value, KeepRunningInTray != value, nameof(KeepRunningInTray));
+    }
+
+    /// <summary>마지막으로 엔진 업데이트를 확인(하고 성공)한 시각</summary>
+    public DateTimeOffset? LastEngineCheck
+    {
+        get => data.LastEngineCheck;
+        set => Change(() => data.LastEngineCheck = value, LastEngineCheck != value, nameof(LastEngineCheck));
+    }
+
+    /// <summary>"앱에 들어 있는 엔진으로 되돌리기"로 되돌린 버전(자동으로 다시 설치하지 않는다)</summary>
+    public string? RejectedEngineVersion
+    {
+        get => data.RejectedEngineVersion;
+        set => Change(() => data.RejectedEngineVersion = value, RejectedEngineVersion != value, nameof(RejectedEngineVersion));
     }
 
     /// <summary>"트레이에서 계속 실행 중" 안내를 이미 보였는지(처음 한 번만 알린다)</summary>
